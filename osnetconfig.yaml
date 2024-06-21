@@ -1,0 +1,384 @@
+apiVersion: v1
+items:
+- apiVersion: osp-director.openstack.org/v1beta1
+  kind: OpenStackNetConfig
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"osp-director.openstack.org/v1beta1","kind":"OpenStackNetConfig","metadata":{"annotations":{},"name":"openstacknetconfig","namespace":"openstack"},"spec":{"attachConfigurations":{"br-ctlplane":{"nodeNetworkConfigurationPolicy":{"desiredState":{"interfaces":[{"bridge":{"options":{"stp":{"enabled":false}},"port":[{"name":"enp1s0"}]},"description":"Linux bridge with enp1s0 as a port","ipv4":{"dhcp":true,"enabled":true},"ipv6":{"dhcp":true,"enabled":true},"mtu":1500,"name":"br-ctlplane","state":"up","type":"linux-bridge"}]},"nodeSelector":{"node-role.kubernetes.io/worker":""}}},"br-ex":{"nodeNetworkConfigurationPolicy":{"desiredState":{"interfaces":[{"bridge":{"options":{"stp":{"enabled":false}},"port":[{"name":"enp6s0"}]},"description":"Linux bridge with enp6s0 as a port","ipv4":{"enabled":false},"ipv6":{"enabled":false},"mtu":1500,"name":"br-ex","state":"up","type":"linux-bridge"}]},"nodeSelector":{"node-role.kubernetes.io/worker":""}}},"br-osp":{"nodeNetworkConfigurationPolicy":{"desiredState":{"interfaces":[{"bridge":{"options":{"stp":{"enabled":false}},"port":[{"name":"enp7s0"}]},"description":"Linux bridge with enp7s0 as a port","ipv4":{"enabled":false},"ipv6":{"enabled":false},"mtu":9000,"name":"br-osp","state":"up","type":"linux-bridge"},{"description":"Configuring enp7s0 on workers","ipv4":{"enabled":false},"ipv6":{"enabled":false},"mtu":9000,"name":"enp7s0","state":"up","type":"ethernet"}]},"nodeSelector":{"node-role.kubernetes.io/worker":""}}}},"dnsSearchDomains":["osptest.test.metalkube.org","test.metalkube.org"],"dnsServers":["172.22.0.1"],"domainName":"osptest.test.metalkube.org","networks":[{"isControlPlane":true,"name":"Control","nameLower":"ctlplane","subnets":[{"attachConfiguration":"br-ctlplane","ipv4":{"allocationEnd":"172.22.0.254","allocationStart":"172.22.0.100","cidr":"172.22.0.0/24","gateway":"172.22.0.1"},"name":"ctlplane"}]},{"name":"InternalApi","nameLower":"internal_api","subnets":[{"attachConfiguration":"br-osp","ipv4":{"allocationEnd":"172.17.0.250","allocationStart":"172.17.0.10","cidr":"172.17.0.0/24"},"name":"internal_api","vlan":20}]},{"name":"External","nameLower":"external","subnets":[{"attachConfiguration":"br-ex","ipv4":{"allocationEnd":"10.0.0.250","allocationStart":"10.0.0.10","cidr":"10.0.0.0/24","gateway":"10.0.0.1"},"name":"external"}]},{"mtu":9000,"name":"Storage","nameLower":"storage","subnets":[{"attachConfiguration":"br-osp","ipv4":{"allocationEnd":"172.18.0.250","allocationStart":"172.18.0.10","cidr":"172.18.0.0/24"},"name":"storage","vlan":30}]},{"name":"StorageMgmt","nameLower":"storage_mgmt","subnets":[{"attachConfiguration":"br-osp","ipv4":{"allocationEnd":"172.19.0.250","allocationStart":"172.19.0.10","cidr":"172.19.0.0/24"},"name":"storage_mgmt","vlan":40}]},{"mtu":9000,"name":"Tenant","nameLower":"tenant","subnets":[{"attachConfiguration":"br-osp","ipv4":{"allocationEnd":"172.20.0.250","allocationStart":"172.20.0.10","cidr":"172.20.0.0/24"},"name":"tenant","vlan":50}],"vip":false}],"ovnBridgeMacMappings":{"physNetworks":[{"macPrefix":"fa:16:3a","name":"datacentre"},{"macPrefix":"fa:16:3b","name":"datacentre2"}]},"preserveReservations":true,"reservations":{"compute-0":{"ipReservations":{"ctlplane":"172.22.0.140","internal_api":"172.17.0.40","storage":"172.18.0.40","tenant":"172.20.0.40"}},"controller-0":{"ipReservations":{"ctlplane":"172.22.0.120","external":"10.0.0.20","internal_api":"172.17.0.20","storage":"172.18.0.20","storage_mgmt":"172.19.0.20","tenant":"172.20.0.20"},"macReservations":{"datacentre":"fa:16:3a:aa:aa:aa","datacentre2":"fa:16:3b:aa:aa:aa"}},"controller-1":{"ipReservations":{"ctlplane":"172.22.0.130","external":"10.0.0.30","internal_api":"172.17.0.30","storage":"172.18.0.30","storage_mgmt":"172.19.0.30","tenant":"172.20.0.30"}},"controlplane":{"ipReservations":{"ctlplane":"172.22.0.110","external":"10.0.0.10","internal_api":"172.17.0.10","storage":"172.18.0.10","storage_mgmt":"172.19.0.10"}},"openstackclient-0":{"ipReservations":{"ctlplane":"172.22.0.251","external":"10.0.0.251","internal_api":"172.17.0.251"}}}}}
+    creationTimestamp: "2024-06-11T22:12:33Z"
+    finalizers:
+    - openstacknetconfig.osp-director.openstack.org
+    generation: 5
+    name: openstacknetconfig
+    namespace: openstack
+    resourceVersion: "881689"
+    uid: 26bd4250-cd0a-4691-9416-b29404afd5f7
+  spec:
+    attachConfigurations:
+      br-ctlplane:
+        nodeNetworkConfigurationPolicy:
+          desiredState:
+            interfaces:
+            - bridge:
+                options:
+                  stp:
+                    enabled: false
+                port:
+                - name: enp1s0
+              description: Linux bridge with enp1s0 as a port
+              ipv4:
+                dhcp: true
+                enabled: true
+              ipv6:
+                dhcp: true
+                enabled: true
+              mtu: 1500
+              name: br-ctlplane
+              state: up
+              type: linux-bridge
+          nodeSelector:
+            kubernetes.io/hostname: ostest-master-1
+        nodeSriovConfigurationPolicy:
+          desiredState:
+            deviceType: vfio-pci
+            mtu: 9000
+            numVfs: 0
+            port: ""
+            spoofCheck: "on"
+            trust: "off"
+      br-ex:
+        nodeNetworkConfigurationPolicy:
+          desiredState:
+            interfaces:
+            - bridge:
+                options:
+                  stp:
+                    enabled: false
+                port:
+                - name: enp6s0
+              description: Linux bridge with enp6s0 as a port
+              ipv4:
+                enabled: false
+              ipv6:
+                enabled: false
+              mtu: 1500
+              name: br-ex
+              state: up
+              type: linux-bridge
+          nodeSelector:
+            kubernetes.io/hostname: ostest-master-1
+        nodeSriovConfigurationPolicy:
+          desiredState:
+            deviceType: vfio-pci
+            mtu: 9000
+            numVfs: 0
+            port: ""
+            spoofCheck: "on"
+            trust: "off"
+      br-osp:
+        nodeNetworkConfigurationPolicy:
+          desiredState:
+            interfaces:
+            - bridge:
+                options:
+                  stp:
+                    enabled: false
+                port:
+                - name: enp7s0
+              description: Linux bridge with enp7s0 as a port
+              ipv4:
+                enabled: false
+              ipv6:
+                enabled: false
+              mtu: 9000
+              name: br-osp
+              state: up
+              type: linux-bridge
+            - description: Configuring enp7s0 on workers
+              ipv4:
+                enabled: false
+              ipv6:
+                enabled: false
+              mtu: 9000
+              name: enp7s0
+              state: up
+              type: ethernet
+          nodeSelector:
+            kubernetes.io/hostname: ostest-master-1
+        nodeSriovConfigurationPolicy:
+          desiredState:
+            deviceType: vfio-pci
+            mtu: 9000
+            numVfs: 0
+            port: ""
+            spoofCheck: "on"
+            trust: "off"
+    dnsSearchDomains:
+    - osptest.test.metalkube.org
+    - test.metalkube.org
+    dnsServers:
+    - 172.22.0.1
+    domainName: osptest.test.metalkube.org
+    networks:
+    - isControlPlane: true
+      mtu: 1500
+      name: Control
+      nameLower: ctlplane
+      subnets:
+      - attachConfiguration: br-ctlplane
+        ipv4:
+          allocationEnd: 172.22.0.254
+          allocationStart: 172.22.0.100
+          cidr: 172.22.0.0/24
+          gateway: 172.22.0.1
+          routes: []
+        ipv6:
+          allocationEnd: ""
+          allocationStart: ""
+          cidr: ""
+          gateway: ""
+          routes: []
+        name: ctlplane
+        vlan: 0
+      vip: true
+    - isControlPlane: false
+      mtu: 1500
+      name: InternalApi
+      nameLower: internal_api
+      subnets:
+      - attachConfiguration: br-osp
+        ipv4:
+          allocationEnd: 172.17.0.250
+          allocationStart: 172.17.0.10
+          cidr: 172.17.0.0/24
+          gateway: ""
+          routes: []
+        ipv6:
+          allocationEnd: ""
+          allocationStart: ""
+          cidr: ""
+          gateway: ""
+          routes: []
+        name: internal_api
+        vlan: 20
+      vip: true
+    - isControlPlane: false
+      mtu: 1500
+      name: External
+      nameLower: external
+      subnets:
+      - attachConfiguration: br-ex
+        ipv4:
+          allocationEnd: 10.0.0.250
+          allocationStart: 10.0.0.10
+          cidr: 10.0.0.0/24
+          gateway: 10.0.0.1
+          routes: []
+        ipv6:
+          allocationEnd: ""
+          allocationStart: ""
+          cidr: ""
+          gateway: ""
+          routes: []
+        name: external
+        vlan: 0
+      vip: true
+    - isControlPlane: false
+      mtu: 9000
+      name: Storage
+      nameLower: storage
+      subnets:
+      - attachConfiguration: br-osp
+        ipv4:
+          allocationEnd: 172.18.0.250
+          allocationStart: 172.18.0.10
+          cidr: 172.18.0.0/24
+          gateway: ""
+          routes: []
+        ipv6:
+          allocationEnd: ""
+          allocationStart: ""
+          cidr: ""
+          gateway: ""
+          routes: []
+        name: storage
+        vlan: 30
+      vip: true
+    - isControlPlane: false
+      mtu: 1500
+      name: StorageMgmt
+      nameLower: storage_mgmt
+      subnets:
+      - attachConfiguration: br-osp
+        ipv4:
+          allocationEnd: 172.19.0.250
+          allocationStart: 172.19.0.10
+          cidr: 172.19.0.0/24
+          gateway: ""
+          routes: []
+        ipv6:
+          allocationEnd: ""
+          allocationStart: ""
+          cidr: ""
+          gateway: ""
+          routes: []
+        name: storage_mgmt
+        vlan: 40
+      vip: true
+    - isControlPlane: false
+      mtu: 9000
+      name: Tenant
+      nameLower: tenant
+      subnets:
+      - attachConfiguration: br-osp
+        ipv4:
+          allocationEnd: 172.20.0.250
+          allocationStart: 172.20.0.10
+          cidr: 172.20.0.0/24
+          gateway: ""
+          routes: []
+        ipv6:
+          allocationEnd: ""
+          allocationStart: ""
+          cidr: ""
+          gateway: ""
+          routes: []
+        name: tenant
+        vlan: 50
+      vip: false
+    ovnBridgeMacMappings:
+      physNetworks:
+      - macPrefix: fa:16:3a
+        name: datacentre
+      - macPrefix: fa:16:3b
+        name: datacentre2
+    preserveReservations: true
+    reservations:
+      compute-0:
+        ipReservations:
+          ctlplane: 172.22.0.140
+          internal_api: 172.17.0.40
+          storage: 172.18.0.40
+          tenant: 172.20.0.40
+        macReservations: {}
+      controller-0:
+        ipReservations:
+          ctlplane: 172.22.0.120
+          external: 10.0.0.20
+          internal_api: 172.17.0.20
+          storage: 172.18.0.20
+          storage_mgmt: 172.19.0.20
+          tenant: 172.20.0.20
+        macReservations:
+          datacentre: fa:16:3a:aa:aa:aa
+          datacentre2: fa:16:3b:aa:aa:aa
+      controller-1:
+        ipReservations:
+          ctlplane: 172.22.0.130
+          external: 10.0.0.30
+          internal_api: 172.17.0.30
+          storage: 172.18.0.30
+          storage_mgmt: 172.19.0.30
+          tenant: 172.20.0.30
+        macReservations: {}
+      controlplane:
+        ipReservations:
+          ctlplane: 172.22.0.110
+          external: 10.0.0.10
+          internal_api: 172.17.0.10
+          storage: 172.18.0.10
+          storage_mgmt: 172.19.0.10
+        macReservations: {}
+      openstackclient-0:
+        ipReservations:
+          ctlplane: 172.22.0.251
+          external: 10.0.0.251
+          internal_api: 172.17.0.251
+        macReservations: {}
+  status:
+    conditions:
+    - lastHearbeatTime: "2024-06-11T22:12:34Z"
+      lastTransitionTime: "2024-06-11T22:12:34Z"
+      message: OpenStackNetConfig openstacknetconfig waiting for all OpenStackNetworks
+        to be configured
+      reason: OpenStackNetCreated
+      status: "False"
+      type: Waiting
+    - lastHearbeatTime: "2024-06-12T12:41:07Z"
+      lastTransitionTime: "2024-06-12T12:41:07Z"
+      message: OpenStackMACAddress CR successfully reconciled
+      reason: MACAddressesCreated
+      status: "True"
+      type: Provisioned
+    - lastHearbeatTime: "2024-06-12T12:41:01Z"
+      lastTransitionTime: "2024-06-12T12:41:01Z"
+      message: 'OpenStackNetAttachment error: OpenStackNetAttach br-osp-bridge encountered
+        an error configuring NodeNetworkConfigurationPolicy'
+      reason: OpenStackNetAttachCreated
+      status: "False"
+      type: Error
+    hosts:
+      compute-0:
+        ipaddresses:
+          ctlplane: 172.22.0.140/24
+          internal_api: 172.17.0.40/24
+          storage: 172.18.0.40/24
+          tenant: 172.20.0.40/24
+        ovnBridgeMacAdresses:
+          datacentre: fa:16:3a:89:75:e0
+          datacentre2: fa:16:3b:81:00:00
+      compute-1:
+        ipaddresses:
+          ctlplane: 172.22.0.100/24
+          internal_api: 172.17.0.13/24
+          storage: 172.18.0.11/24
+          tenant: 172.20.0.10/24
+        ovnBridgeMacAdresses:
+          datacentre: fa:16:3a:0e:e8:ea
+          datacentre2: fa:16:3b:53:f5:b3
+      controller-0:
+        ipaddresses:
+          ctlplane: 172.22.0.120/24
+          external: 10.0.0.20/24
+          internal_api: 172.17.0.20/24
+          storage: 172.18.0.20/24
+          storage_mgmt: 172.19.0.20/24
+          tenant: 172.20.0.20/24
+        ovnBridgeMacAdresses:
+          datacentre: fa:16:3a:aa:aa:aa
+          datacentre2: fa:16:3b:aa:aa:aa
+      controlplane:
+        ipaddresses:
+          ctlplane: 172.22.0.110/24
+          external: 10.0.0.10/24
+          internal_api: 172.17.0.10/24
+          storage: 172.18.0.10/24
+          storage_mgmt: 172.19.0.10/24
+        ovnBridgeMacAdresses: {}
+      openstackclient-0:
+        ipaddresses:
+          ctlplane: 172.22.0.251/24
+          external: 10.0.0.251/24
+          internal_api: 172.17.0.251/24
+        ovnBridgeMacAdresses: {}
+      ovndbs:
+        ipaddresses:
+          internal_api: 172.17.0.12/24
+        ovnBridgeMacAdresses: {}
+      redis:
+        ipaddresses:
+          internal_api: 172.17.0.11/24
+        ovnBridgeMacAdresses: {}
+    provisioningStatus:
+      attachDesiredCount: 3
+      attachReadyCount: 3
+      netDesiredCount: 6
+      netReadyCount: 6
+      physNetDesiredCount: 2
+      physNetReadyCount: 2
+      reason: OpenStackNetConfig openstacknetconfig all resources configured
+      state: Configured
+kind: List
+metadata:
+  resourceVersion: ""

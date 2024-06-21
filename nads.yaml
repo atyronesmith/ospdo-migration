@@ -1,0 +1,119 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: ctlplane-rhoso
+  namespace: openstack
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "ctlplane-rhoso",
+      "type": "bridge",
+      "master": "br-ctlplane",
+      "ipam": {
+        "type": "whereabouts",
+        "range": "172.22.0.0/24",
+        "range_start": "172.22.0.30",
+        "range_end": "172.22.0.70"
+      }
+    }
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: internalapi-rhoso
+  namespace: openstack
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "internalapi-rhoso",
+      "type": "macvlan",
+      "master": "enp7s0.20",
+      "ipam": {
+        "type": "whereabouts",
+        "range": "172.17.0.0/24",
+        "range_start": "172.17.0.30",
+        "range_end": "172.17.0.70"
+      }
+    }
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: external-rhoso
+  namespace: openstack
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "external-rhoso",
+      "type": "macvlan",
+      "master": "br-external",
+      "ipam": {
+        "type": "whereabouts",
+        "range": "10.0.0.0/24",
+        "range_start": "10.0.0.30",
+        "range_end": "10.0.0.70"
+      }
+    }
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: storage-rhoso
+  namespace: openstack
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "storage-rhoso",
+      "type": "macvlan",
+      "master": "enp7s0.30",
+      "ipam": {
+        "type": "whereabouts",
+        "range": "172.18.0.0/24",
+        "range_start": "172.18.0.30",
+        "range_end": "172.18.0.70"
+      }
+    }
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: storagemgmt-rhoso
+  namespace: openstack
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "storagemgmt-rhoso",
+      "type": "macvlan",
+      "master": "enp7s0.40",
+      "ipam": {
+        "type": "whereabouts",
+        "range": "172.19.0.0/24",
+        "range_start": "172.19.0.30",
+        "range_end": "172.19.0.70"
+      }
+    }
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: tenant-rhoso
+  namespace: openstack
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "tenant-rhoso",
+      "type": "macvlan",
+      "master": "enp7s0.50",
+      "ipam": {
+        "type": "whereabouts",
+        "range": "172.20.0.0/24",
+        "range_start": "172.20.0.30",
+        "range_end": "172.20.0.70"
+      }
+    }
