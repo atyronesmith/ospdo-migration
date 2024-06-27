@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: rootca-internal
+  namespace: openstack
+  labels:
+    osp-rootca-issuer-public: ""
+    osp-rootca-issuer-internal: ""
+    osp-rootca-issuer-libvirt: ""
+    osp-rootca-issuer-ovn: ""
+spec:
+  ca:
+    secretName: rootca-internal

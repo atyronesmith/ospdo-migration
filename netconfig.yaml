@@ -8,7 +8,7 @@ spec:
     - name: ctlplane-rhoso
       dnsDomain: ctlplane-rhoso.osptest.test.metalkube.org
       subnets:
-        - name: ctlplane
+        - name: ctlplane-rhoso
           allocationRanges:
           - end: 172.22.0.149
             start: 172.22.0.100
@@ -19,7 +19,7 @@ spec:
     - name: internalapi-rhoso
       dnsDomain: internalapi-rhoso.osptest.test.metalkube.org
       subnets:
-        - name: internalapi
+        - name: internalapi-rhoso
           allocationRanges:
           - end: 172.17.0.149
             start: 172.17.0.100
@@ -29,7 +29,7 @@ spec:
     - name: external-rhoso
       dnsDomain: external-rhoso.osptest.test.metalkube.org
       subnets:
-        - name: external
+        - name: external-rhoso
           allocationRanges:
             - end: 10.0.0.149
               start: 10.0.0.100
@@ -40,7 +40,7 @@ spec:
     - name: storage-rhoso
       dnsDomain: storage-rhoso.osptest.test.metalkube.org
       subnets:
-        - name: storage
+        - name: storage-rhoso
           allocationRanges:
           - end: 172.18.0.149
             start: 172.18.0.100

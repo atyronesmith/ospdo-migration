@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CONTROLLER_NODE=$(oc get pods -o wide | grep launcher | awk {'print $7'})
-NG_NODES=$(oc get nodes -o name | grep -v $CONTROLLER_NODE | sed 's#node/##g' | tr '\n' ' ')
+NG_NODES=$(oc get nodes -o name | grep -v "$CONTROLLER_NODE" | sed 's#node/##g' | tr '\n' ' ')
 NODE1=$(echo "${NG_NODES}" | cut -d ' ' -f 1)
 NODE2=$(echo "${NG_NODES}" | cut -d ' ' -f 2)
 

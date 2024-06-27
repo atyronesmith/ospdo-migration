@@ -2,11 +2,11 @@
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: ctlplane
+  name: ctlplane-rhoso
   namespace: metallb-system
 spec:
   ipAddressPools:
-  - ctlplane
+  - ctlplane-rhoso
   interfaces:
   - enp1s0
 ---
@@ -17,28 +17,28 @@ metadata:
   namespace: metallb-system
 spec:
   ipAddressPools:
-  - internalapi
+  - internalapi-rhoso
   interfaces:
   - enp7s0.20 
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: storage
+  name: storage-rhoso
   namespace: metallb-system
 spec:
   ipAddressPools:
-  - storage
+  - storage-rhoso
   interfaces:
   - enp7s0.30
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: tenant
+  name: tenant-rhoso
   namespace: metallb-system
 spec:
   ipAddressPools:
-  - tenant
+  - tenant-rhoso
   interfaces:
   - enp7s0.50
