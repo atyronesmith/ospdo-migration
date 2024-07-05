@@ -29,12 +29,12 @@ spec:
       ipv6:
         enabled: false
     - description: storage vlan interface
-      name: enp7s0.21
+      name: enp7s0.30
       state: up
       type: vlan
       vlan:
         base-iface: enp7s0
-        id: 21
+        id: 30
         reorder-headers: true
       ipv4:
         address:
@@ -45,12 +45,12 @@ spec:
       ipv6:
         enabled: false
     - description: tenant vlan interface
-      name: enp7s0.22
+      name: enp7s0.50
       state: up
       type: vlan
       vlan:
         base-iface: enp7s0
-        id: 22
+        id: 50
         reorder-headers: true
       ipv4:
         address:
@@ -61,12 +61,12 @@ spec:
       ipv6:
         enabled: false
     - description: storagemgmt vlan interface
-      name: enp7s0.23
+      name: enp7s0.40
       state: up
       type: vlan
       vlan:
         base-iface: enp7s0
-        id: 23
+        id: 40
         reorder-headers: true
       ipv4:
         address:

@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mariadb-copy-data
+  annotations:
+    openshift.io/scc: anyuid
+    k8s.v1.cni.cncf.io/networks: ${INTERNAL_API_NET}
+  labels:
+    app: adoption
+spec:
+  containers:
+  - image: $MARIADB_IMAGE
+    command: [ "sh", "-c", "sleep infinity"]
+    name: adoption
+    volumeMounts:
+    - mountPath: /backup
+      name: mariadb-data
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: ALL
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+  - name: mariadb-data
+    persistentVolumeClaim:
+      claimName: mariadb-data

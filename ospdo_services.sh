@@ -5,6 +5,8 @@ usage() {
     echo "Description: This script starts or stops all OSPdO services."
     exit 1
 }
+# shellcheck source=common.sh
+. common.sh
 
 # Update the services list to be stopped
 ServicesToStop=("tripleo_horizon.service"
@@ -80,7 +82,7 @@ check_openstack() {
 
 stop_openstack_systemd_services() {
     echo "Stopping systemd OpenStack services"
-    for service in ${ServicesToStop[*]}; do
+    for service in "${ServicesToStop[@]}"; do
         echo "Stopping the $service in controller"
         if ${CONTROLLER_SSH} sudo systemctl is-active "$service"; then
             ${CONTROLLER_SSH} sudo systemctl stop "$service"
@@ -90,7 +92,7 @@ stop_openstack_systemd_services() {
 
 check_openstack_systemd_services() {
     echo "Checking systemd OpenStack services"
-    for service in ${ServicesToStop[*]}; do
+    for service in "${ServicesToStop[@]}"; do
         if ! ${CONTROLLER_SSH} systemctl show "$service" | grep ActiveState=inactive >/dev/null; then
             echo "ERROR: Service $service still running on controller"
         else
@@ -102,7 +104,7 @@ check_openstack_systemd_services() {
 stop_pcm_openstack_services() {
     echo "Stopping pacemaker OpenStack services"
     echo "Using controller to run pacemaker commands"
-    for resource in ${PacemakerResourcesToStop[*]}; do
+    for resource in "${PacemakerResourcesToStop[@]}"; do
         if ${CONTROLLER_SSH} sudo pcs resource config "$resource" &>/dev/null; then
             echo "Stopping $resource"
             ${CONTROLLER_SSH} sudo pcs resource disable "$resource"
@@ -115,7 +117,7 @@ stop_pcm_openstack_services() {
 check_pcm_openstack_services() {
     echo "Checking pacemaker OpenStack services"
     echo "Using controller to run pacemaker commands"
-    for resource in ${PacemakerResourcesToStop[*]}; do
+    for resource in "${PacemakerResourcesToStop[@]}"; do
         if ${CONTROLLER_SSH} sudo pcs resource config "$resource" &>/dev/null; then
             if ! ${CONTROLLER_SSH} sudo pcs resource status "$resource" | grep Started; then
                 echo "OK: Service $resource is stopped"

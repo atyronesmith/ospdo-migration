@@ -3,6 +3,8 @@ kind: OpenStackControlPlane
 metadata:
   name: openstack
 spec:
+  nodeSelector:
+    type: openstack
   storageClass: host-nfs-storageclass
   tls:
     podLevel:

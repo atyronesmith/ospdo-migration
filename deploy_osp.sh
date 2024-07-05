@@ -34,47 +34,34 @@ fi
 
 install_yaml_dir=$(realpath "$1")
 
-PASSWORD_FILE="tripleo-passwords.yaml"
+# shellcheck source=common.sh
+. common.sh
+. common-ospdo.sh
 
 # Set the OpenShift project to "openstack" and fail on error
-oc project openstack || {
+oc project -q openstack || {
     echo "Failed to set OpenShift project to openstack"
     exit 1
 }
 
-# Get the name of the OCP node where the OSP Controller VM is running
-# For this POC, we only deploy a single controller VM
-# TODO - deploy with 3 controller VM and scale down to 1 VM
-CONTROLLER_NODE=$(oc get pod -n openstack -l kubevirt.io=virt-launcher -o jsonpath='{.items[0].metadata.labels.kubevirt\.io/nodeName}')
-# Fail if CONTROLLER_NODE is an empty string
-if [[ -z "$CONTROLLER_NODE" ]]; then
-    echo "Failed to get the name of the OCP node where the OSP Controller VM is running"
-    exit 1
-fi
-
 # Remove OSPdO NNCPs from the other two nodes which are not running the controller VM
 for i in br-ctlplane br-ex br-osp; do
-    oc patch osnetconfig openstacknetconfig --type json -p '[{"op": "replace", "path": "/spec/attachConfigurations/'$i'/nodeNetworkConfigurationPolicy/nodeSelector", "value": {"kubernetes.io/hostname": "'"$CONTROLLER_NODE"'"} } ]'
+    oc patch osnetconfig openstacknetconfig --type json -p '[{"op": "replace", \
+    "path": "/spec/attachConfigurations/'$i'/nodeNetworkConfigurationPolicy/nodeSelector", \
+    "value": {"kubernetes.io/hostname": "'"$CONTROLLER_NODE"'"} } ]'
 done
 
-# Get the names of the other two nodes that we will use for NG
-NG_NODES=$(oc get nodes -o name -l kubernetes.io/hostname!="$CONTROLLER_NODE" | sed 's#node/##g' | tr '\n' ' ')
-NODE1=$(echo "${NG_NODES}" | cut -d ' ' -f 1)
-export NODE1
-NODE2=$(echo "${NG_NODES}" | cut -d ' ' -f 2)
-export NODE2
-
 # create an apply custom NNCPs for NG
-envsubst <node1-nncp.yaml | oc apply -f - || {
+envsubst <yamls/node1-nncp.yaml | oc apply -f - || {
     echo "Failed to set apply node1-nncp.yaml"
     exit 1
 }
-envsubst <node2-nncp.yaml | oc apply -f - || {
+envsubst <yamls/node2-nncp.yaml | oc apply -f - || {
     echo "Failed to set apply node2-nncp.yaml"
     exit 1
 }
 
-if ! oc apply -f nads.yaml; then
+if ! oc apply -f yamls/nads.yaml; then
   echo "Failed to apply net-attach-def..."
   exit 1
 fi
@@ -90,11 +77,11 @@ fi
 # Make sure OVNKubernetes IPForwarding is enabled
 oc patch network.operator cluster -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"ipForwarding": "Global"}}}}}' --type=merge
 
-oc apply -f ipaddresspools.yaml || {
+oc apply -f yamls/ipaddresspools.yaml || {
     echo "Failed to apply ipaddresspool"
     exit 1
 }
-oc apply -f l2advertisement.yaml || {
+oc apply -f yamls/l2advertisement.yaml || {
     echo "Failed to apply l2advertisement"
     exit 1
 }
@@ -106,12 +93,6 @@ oc label nodes "${NODE2}" type=openstack
 oc get secret tripleo-passwords -o json | jq -r '.data["tripleo-overcloud-passwords.yaml"]' | base64 -d >"${PASSWORD_FILE}"
 
 oc rsh openstackclient cat ./home/cloud-admin/.config/openstack/clouds.yaml
-#j6t6l5drnxnfsrhlw92qdbj68
-
-# k8s.v1.cni.cncf.io/networks: '[{"name": "ctlplane-static", "namespace": "openstack",
-#   "ips": ["172.22.0.251/24"]}, {"name": "external-static", "namespace": "openstack",
-#   "ips": ["10.0.0.251/24"]}, {"name": "internalapi-static", "namespace": "openstack",
-#   "ips": ["172.17.0.251/24"]}]'
 
 IPA_SSH="podman exec -ti freeipa-server"
 # For OSPdO installed by director-dev-tools, the server host runs the freeipa server as a container...
@@ -180,43 +161,30 @@ else
     echo "Issuer status is not True"
 fi
 
-# TODO - Stop and disable the certmonger service on all data plane nodes, and stop tracking all certificates managed by the service:
-
-# TODO -- extract env information automatically
-CONTROLLER_SSH="oc rsh openstackclient ssh controller-0.ctlplane"
-export CONTROLLER_SSH
-MARIADB_IMAGE=registry.redhat.io/rhosp-dev-preview/openstack-mariadb-rhel9:18.0
-export MARIADB_IMAGE
-SOURCE_DB_ROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -F ': ' '{ print $2; }')
-export SOURCE_DB_ROOT_PASSWORD
-SOURCE_MARIADB_IP=172.22.0.160
-export SOURCE_MARIADB_IP
-RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"}}, "spec":{"nodeName": "ostest-master-0"}}'
-
-if ! oc apply -f issuer.yaml; then
+if ! oc apply -f yamls/issuer.yaml; then
     echo "Unable to apply Issuer!"
     exit 1
 fi
 
 
-PULL_OPENSTACK_CONFIGURATION_DATABASES=$(oc run mariadb-client -q --image ${MARIADB_IMAGE} \
+PULL_OPENSTACK_CONFIGURATION_DATABASES=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
     -i --rm --restart=Never --overrides="$RUN_OVERRIDES" --mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" -e 'SHOW databases;')
 echo "$PULL_OPENSTACK_CONFIGURATION_DATABASES"
 
 #  --overrides='{ "apiVersion": "v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"}}, "spec":{"nodeName": "ostest-master-0"}}' -- \
 
-PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK=$(oc run mariadb-client -q --image ${MARIADB_IMAGE} \
+PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
     -i --rm --restart=Never --overrides="$RUN_OVERRIDES" --mysqlcheck --all-databases -h "$SOURCE_MARIADB_IP" -u root -p"$SOURCE_DB_ROOT_PASSWORD" | grep -v OK)
 export PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK
 echo "$PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK"
 
-PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS=$(oc run mariadb-client -q --image ${MARIADB_IMAGE} \
+PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
     -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -- mysql -rsh "${SOURCE_MARIADB_IP}" -uroot -p"${SOURCE_DB_ROOT_PASSWORD}" nova_api -e \
     'select uuid,name,transport_url,database_connection,disabled from cell_mappings;')
 export PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS
 echo "$PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS"
 
-PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES=$(oc run mariadb-client -q --image ${MARIADB_IMAGE} \
+PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
     -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" nova_api -e \
     "select host from nova.services where services.binary='nova-compute';")
 export PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES
@@ -227,14 +195,14 @@ export PULL_OPENSTACK_CONFIGURATION_NOVAMANAGE_CELL_MAPPINGS
 echo "$PULL_OPENSTACK_CONFIGURATION_NOVAMANAGE_CELL_MAPPINGS"
 
 cat >~/.source_cloud_exported_variables <<EOF
-PULL_OPENSTACK_CONFIGURATION_DATABASES=$(oc run mariadb-client -q --image ${MARIADB_IMAGE} \
+PULL_OPENSTACK_CONFIGURATION_DATABASES=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
     -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" -e 'SHOW databases;')
-PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK=$(oc run mariadb-client -q --image ${MARIADB_IMAGE} \
+PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
         -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -- mysqlcheck --all-databases -h "$SOURCE_MARIADB_IP" -u root -p"$SOURCE_DB_ROOT_PASSWORD" | grep -v OK)
-PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS=$(oc run mariadb-client -q --image ${MARIADB_IMAGE} \
+PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
         -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -- mysql -rsh "${SOURCE_MARIADB_IP}" -uroot -p"${SOURCE_DB_ROOT_PASSWORD}" nova_api -e \
         'select uuid,name,transport_url,database_connection,disabled from cell_mappings;')
-PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES=$(oc run mariadb-client -q --image ${MARIADB_IMAGE} \
+PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
         -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" nova_api -e \
         "select host from nova.services where services.binary='nova-compute';")
 CONTROLLER_SSH="oc rsh -c openstackclient openstackclient ssh controller-0.ctlplane"
@@ -245,7 +213,8 @@ chmod 0600 ~/.source_cloud_exported_variables
 #TODO
 # Optional: If there are neutron-sriov-nic-agent agents running in the deployment, get its configuration:
 
-oc run mariadb-client -q --image ${MARIADB_IMAGE} -it --rm --restart=Never --overrides="$RUN_OVERRIDES"-- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD"ovs_neutron -e "select host, configurations from agents where agents.binary='neutron-sriov-nic-agent';"
+oc run mariadb-client -q --image "${MARIADB_IMAGE}" -it --rm --restart=Never --overrides="$RUN_OVERRIDES"-- mysql -rsh "$SOURCE_MARIADB_IP" \
+   -uroot -p"$SOURCE_DB_ROOT_PASSWORD"ovs_neutron -e "select host, configurations from agents where agents.binary='neutron-sriov-nic-agent';"
 
 # oc run mariadb-client -q --image ${MARIADB_IMAGE}\
 #   -it --rm --restart=Never --overrides="$RUN_OVERRIDES" /bin/bash
@@ -254,9 +223,10 @@ ADMIN_PASSWORD=$(grep <"${PASSWORD_FILE}" ' AdminPassword:' | awk -F ': ' '{ pri
 
 AODH_PASSWORD=$(grep <"${PASSWORD_FILE}" ' AodhPassword:' | awk -F ': ' '{ print $2; }')
 BARBICAN_PASSWORD=$(grep <"${PASSWORD_FILE}" ' BarbicanPassword:' | awk -F ': ' '{ print $2; }')
+BARBICANKEK_PASSWORD=$(grep <"${PASSWORD_FILE}" ' BarbicanSimpleCryptoKek:' | awk -F ': ' '{ print $2; }')
 CEILOMETER_METERING_SECRET=$(grep <"${PASSWORD_FILE}" ' CeilometerMeteringSecret:' | awk -F ': ' '{ print $2; }')
 CEILOMETER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CeilometerPassword:' | awk -F ': ' '{ print $2; }')
-CINDER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CinderPassword:' | awk -F ': ' '{ print $2; }')
+CINDER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CinderPassword:' | awk -F ': ' '{ print $2; }' )
 CONGRESS_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CongressPassword:' | awk -F ': ' '{ print $2; }')
 DESIGNATE_PASSWORD=$(grep <"${PASSWORD_FILE}" ' DesignatePassword:' | awk -F ': ' '{ print $2; }')
 GLANCE_PASSWORD=$(grep <"${PASSWORD_FILE}" ' GlancePassword:' | awk -F ': ' '{ print $2; }')
@@ -268,13 +238,13 @@ NEUTRON_PASSWORD=$(grep <"${PASSWORD_FILE}" ' NeutronPassword:' | awk -F ': ' '{
 NOVA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' NovaPassword:' | awk -F ': ' '{ print $2; }')
 OCTAVIA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' OctaviaPassword:' | awk -F ': ' '{ print $2; }')
 PLACEMENT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' PlacementPassword:' | awk -F ': ' '{ print $2; }')
-SWIFT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' SwiftPassword:' | awk -F ': ' '{ print $2; }')
 MYSQLROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -F ': ' '{ print $2; }')
 
 oc set data secret/osp-secret "AdminPassword=$ADMIN_PASSWORD"
 
 oc set data secret/osp-secret "AodhPassword=$AODH_PASSWORD"
 oc set data secret/osp-secret "BarbicanPassword=$BARBICAN_PASSWORD"
+oc set data secret/osp-secret "BarbicanSimpleCryptoKEK=$BARBICANKEK_PASSWORD"
 oc set data secret/osp-secret "CeilometerMeteringSecret=$CEILOMETER_METERING_SECRET"
 oc set data secret/osp-secret "CeilometerPassword=$CEILOMETER_PASSWORD"
 oc set data secret/osp-secret "CinderPassword=$CINDER_PASSWORD"
@@ -291,12 +261,14 @@ oc set data secret/osp-secret "NeutronPassword=$NEUTRON_PASSWORD"
 oc set data secret/osp-secret "NovaPassword=$NOVA_PASSWORD"
 oc set data secret/osp-secret "OctaviaPassword=$OCTAVIA_PASSWORD"
 oc set data secret/osp-secret "PlacementPassword=$PLACEMENT_PASSWORD"
-oc set data secret/osp-secret "SwiftPassword=$SWIFT_PASSWORD"
 
-oc apply -f openstackcontrolplane.yaml
+oc apply -f yamls/openstackcontrolplane.yaml
 
 #TODO wait for Ready
-oc wait openstackcontrolplane openstack --for condition=Ready --timeout=600s
+if ! oc wait openstackcontrolplane openstack --for condition=Ready --timeout=600s; then
+    echo "Failed to wait for openstackcontrolplane to be Ready"
+    exit 1
+fi
 
 
 # permissions were wrong on the rabbitmq-cell1 pods mnesia folder for some reason
