@@ -31,7 +31,6 @@ ServicesToStop=("tripleo_horizon.service"
     "tripleo_nova_metadata.service"
     "tripleo_nova_scheduler.service"
     "tripleo_nova_vnc_proxy.service"
-    "tripleo_aodh_api.service"
     "tripleo_aodh_api_cron.service"
     "tripleo_aodh_evaluator.service"
     "tripleo_aodh_listener.service"
@@ -53,51 +52,52 @@ PacemakerResourcesToStop=("openstack-cinder-volume"
 CONTROLLER_SSH="oc rsh -c openstackclient openstackclient ssh controller-0.ctlplane"
 
 check_openstack() {
-    if ${CONTROLLER_SSH} openstack server list --all-projects -c ID -c Status | grep -E '\| .+ing \|'; then
+    ${CONTROLLER_SSH} openstack server list --all-projects -c ID -c Status | grep -E '\| .+ing \|' || {
         echo "ERROR: Instances are still running"
-    else
-        echo "OK: No instances are in state transition"
-    fi
-    if ${CONTROLLER_SSH} openstack volume list --all-projects -c ID -c Status | grep -E '\| .+ing \|' | grep -vi error; then
+        exit 1
+    }
+    echo "OK: No instances are in state transition"
+    ${CONTROLLER_SSH} openstack volume list --all-projects -c ID -c Status | grep -E '\| .+ing \|' | grep -vi error || {
         echo "ERROR: Volumes are still in state transition"
-    else
-        echo "OK: No volumes are in state transition"
-    fi
-    if ${CONTROLLER_SSH} openstack volume backup list --all-projects -c ID -c Status | grep -E '\| .+ing \|' | grep -vi error; then
+        exit 1
+    }
+    echo "OK: No volumes are in state transition"
+    ${CONTROLLER_SSH} openstack volume backup list --all-projects -c ID -c Status | grep -E '\| .+ing \|' | grep -vi error || {
         echo "ERROR: Volume backups are still in state transition"
-    else
-        echo "OK: No volume backups are in state transition"
-    fi
-    if ${CONTROLLER_SSH} openstack share list --all-projects -c ID -c Status | grep -E '\| .+ing \|' | grep -vi error; then
+        exit 1
+    }
+    echo "OK: No volume backups are in state transition"
+    ${CONTROLLER_SSH} openstack share list --all-projects -c ID -c Status | grep -E '\| .+ing \|' | grep -vi error || {
         echo "ERROR: Shares are still in state transition"
-    else
-        echo "OK: No shares are in state transition"
-    fi
-    if ${CONTROLLER_SSH} openstack image list -c ID -c Status | grep -E '\| .+ing \|'; then 
+        exit 1
+    }
+    echo "OK: No shares are in state transition"
+    ${CONTROLLER_SSH} openstack image list -c ID -c Status | grep -E '\| .+ing \|' || {
         echo "ERROR: Images are still in state transition"
-    else
-        echo "OK: No images are in state transition"
-    fi
+        exit 1
+    }
+    echo "OK: No images are in state transition"
 }
 
 stop_openstack_systemd_services() {
     echo "Stopping systemd OpenStack services"
     for service in "${ServicesToStop[@]}"; do
         echo "Stopping the $service in controller"
-        if ${CONTROLLER_SSH} sudo systemctl is-active "$service"; then
+        ${CONTROLLER_SSH} sudo systemctl is-active "$service" && {
             ${CONTROLLER_SSH} sudo systemctl stop "$service"
-        fi
+        }
     done
 }
 
 check_openstack_systemd_services() {
     echo "Checking systemd OpenStack services"
     for service in "${ServicesToStop[@]}"; do
-        if ! ${CONTROLLER_SSH} systemctl show "$service" | grep ActiveState=inactive >/dev/null; then
+        ${CONTROLLER_SSH} systemctl show "$service" | grep ActiveState=inactive >/dev/null || {
             echo "ERROR: Service $service still running on controller"
-        else
+            exit 1
+        }
             echo "OK: Service $service is not running on controller"
-        fi
+        
     done
 }
 
@@ -105,12 +105,7 @@ stop_pcm_openstack_services() {
     echo "Stopping pacemaker OpenStack services"
     echo "Using controller to run pacemaker commands"
     for resource in "${PacemakerResourcesToStop[@]}"; do
-        if ${CONTROLLER_SSH} sudo pcs resource config "$resource" &>/dev/null; then
-            echo "Stopping $resource"
-            ${CONTROLLER_SSH} sudo pcs resource disable "$resource"
-        else
-            echo "Service $resource not present"
-        fi
+        ${CONTROLLER_SSH} sudo pcs resource config "$resource" &>/dev/null
     done
 }
 
@@ -118,13 +113,11 @@ check_pcm_openstack_services() {
     echo "Checking pacemaker OpenStack services"
     echo "Using controller to run pacemaker commands"
     for resource in "${PacemakerResourcesToStop[@]}"; do
-        if ${CONTROLLER_SSH} sudo pcs resource config "$resource" &>/dev/null; then
-            if ! ${CONTROLLER_SSH} sudo pcs resource status "$resource" | grep Started; then
-                echo "OK: Service $resource is stopped"
-            else
-                echo "ERROR: Service $resource is started"
-            fi
-        fi
+        ${CONTROLLER_SSH} sudo pcs resource config "$resource" &>/dev/null && {
+            ${CONTROLLER_SSH} sudo pcs resource status "$resource" | grep Started || {
+                echo "ERROR: Service $resource is running"
+            }
+        }
     done
 }
 
