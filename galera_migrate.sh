@@ -38,6 +38,7 @@ delete_mariadb_data() {
 # If the WSREP status is 'Synced' for all nodes, the function returns successfully.
 # If any error occurs during the process, appropriate error messages are displayed and the function exits with a non-zero status code.
 
+
 create_mariadb_data() {
     if ! oc get pvc mariadb-data; then
         envsubst <yamls/mariadb-copy-data-pvc.yaml | oc apply -f -

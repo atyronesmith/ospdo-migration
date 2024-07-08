@@ -61,10 +61,10 @@ envsubst <yamls/node2-nncp.yaml | oc apply -f - || {
     exit 1
 }
 
-if ! oc apply -f yamls/nads.yaml; then
-  echo "Failed to apply net-attach-def..."
-  exit 1
-fi
+oc apply -f yamls/nads.yaml || {
+    echo "Failed to apply net-attach-def..."
+    exit 1
+}
 
 # Install the RHOSO operators
 (cd "$install_yaml_dir" || exit && BMO_SETUP=false NETWORK_ISOLATION=false make openstack)
@@ -75,7 +75,10 @@ if [ "$(oc get pod --no-headers=true -l component=speaker -n metallb-system | wc
 fi
 
 # Make sure OVNKubernetes IPForwarding is enabled
-oc patch network.operator cluster -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"ipForwarding": "Global"}}}}}' --type=merge
+oc patch network.operator cluster -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"ipForwarding": "Global"}}}}}' --type=merge || {
+    echo "Failed to patch network.operator"
+    exit 1
+}
 
 oc apply -f yamls/ipaddresspools.yaml || {
     echo "Failed to apply ipaddresspool"
@@ -86,8 +89,14 @@ oc apply -f yamls/l2advertisement.yaml || {
     exit 1
 }
 
-oc label nodes "${NODE1}" type=openstack
-oc label nodes "${NODE2}" type=openstack
+oc label nodes "${NODE1}" type=openstack || {
+    echo "Failed to label node1"
+    exit 1
+}
+oc label nodes "${NODE2}" type=openstack || {
+    echo "Failed to label node2"
+    exit 1
+}
 
 # Extract passwords from OSPdO
 oc get secret tripleo-passwords -o json | jq -r '.data["tripleo-overcloud-passwords.yaml"]' | base64 -d >"${PASSWORD_FILE}"
@@ -110,50 +119,50 @@ $IPA_SSH certutil -L -d /etc/pki/pki-tomcat/alias
 # Server-Cert cert-pki-ca                                      u,u,u
 
 # Export the certificate and key from the /etc/pki/pki-tomcat/alias directory:
-if ! $IPA_SSH pk12util -o /tmp/freeipa.p12 -n 'caSigningCert cert-pki-ca' \
+$IPA_SSH pk12util -o /tmp/freeipa.p12 -n 'caSigningCert cert-pki-ca' \
     -d /etc/pki/pki-tomcat/alias -k /etc/pki/pki-tomcat/alias/pwdfile.txt \
-    -w /etc/pki/pki-tomcat/alias/pwdfile.txt; then
+    -w /etc/pki/pki-tomcat/alias/pwdfile.txt || {
     echo "Unable to extract caSigningCert..."
     exit 1
-fi
+}
 
 # Create the secret that contains the root CA
-if ! oc get secret rootca-internal >/dev/null 2>&1; then
+oc get secret rootca-internal >/dev/null 2>&1 || {
     oc create secret generic rootca-internal
-fi
+}
 
 OPENSSL_OPTION_NOENC='-noenc'
-if $IPA_SSH openssl version | grep '1.1.1' >/dev/null 2>&1; then
+$IPA_SSH openssl version | grep '1.1.1' >/dev/null 2>&1 || {
     OPENSSL_OPTION_NOENC='-nodes'
-fi
+}
 
-if ! oc patch secret rootca-internal -n openstack -p="{\"data\":{\"ca.crt\": \
+oc patch secret rootca-internal -n openstack -p="{\"data\":{\"ca.crt\": \
     \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
-    -nokeys | openssl x509 | base64 -w 0)\"}}"; then
+    -nokeys | openssl x509 | base64 -w 0)\"}}" || {
     echo "Unable to patch secret ca.crt."
     exit 1
-fi
+}
 
-if ! oc patch secret rootca-internal -n openstack -p="{\"data\":{\"tls.crt\": \
+oc patch secret rootca-internal -n openstack -p="{\"data\":{\"tls.crt\": \
     \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
-    -nokeys | openssl x509 | base64 -w 0)\"}}"; then
+    -nokeys | openssl x509 | base64 -w 0)\"}}" || {
     echo "Unable to patch secret tls.crt."
     exit 1
-fi
+}
 
 # openssl pkcs12 version is 1.1.1 in what is deployed
 #  documentation assumes version 3+
-if ! oc patch secret rootca-internal -n openstack -p="{\"data\":{\"tls.key\": \
+oc patch secret rootca-internal -n openstack -p="{\"data\":{\"tls.key\": \
     \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
-    -nocerts "${OPENSSL_OPTION_NOENC}" | openssl rsa | base64 -w 0)\"}}"; then
+    -nocerts "${OPENSSL_OPTION_NOENC}" | openssl rsa | base64 -w 0)\"}}" || {
     echo "Unable to patch secret tls.crt."
     exit 1
-fi
+}
 
-if ! issuer_status=$(oc get issuers -n openstack -o jsonpath='{.items[0].status.conditions[0].status}'); then
+issuer_status=$(oc get issuers -n openstack -o jsonpath='{.items[0].status.conditions[0].status}') || {
     echo "Failed to get issuers status."
     exit 1
-fi
+}
 
 if [[ "$issuer_status" == "True" ]]; then
     echo "Issuer Ready"
@@ -161,11 +170,10 @@ else
     echo "Issuer status is not True"
 fi
 
-if ! oc apply -f yamls/issuer.yaml; then
+oc apply -f yamls/issuer.yaml || {
     echo "Unable to apply Issuer!"
     exit 1
-fi
-
+}
 
 PULL_OPENSTACK_CONFIGURATION_DATABASES=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
     -i --rm --restart=Never --overrides="$RUN_OVERRIDES" --mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" -e 'SHOW databases;')
@@ -214,7 +222,7 @@ chmod 0600 ~/.source_cloud_exported_variables
 # Optional: If there are neutron-sriov-nic-agent agents running in the deployment, get its configuration:
 
 oc run mariadb-client -q --image "${MARIADB_IMAGE}" -it --rm --restart=Never --overrides="$RUN_OVERRIDES"-- mysql -rsh "$SOURCE_MARIADB_IP" \
-   -uroot -p"$SOURCE_DB_ROOT_PASSWORD"ovs_neutron -e "select host, configurations from agents where agents.binary='neutron-sriov-nic-agent';"
+    -uroot -p"$SOURCE_DB_ROOT_PASSWORD"ovs_neutron -e "select host, configurations from agents where agents.binary='neutron-sriov-nic-agent';"
 
 # oc run mariadb-client -q --image ${MARIADB_IMAGE}\
 #   -it --rm --restart=Never --overrides="$RUN_OVERRIDES" /bin/bash
@@ -226,7 +234,7 @@ BARBICAN_PASSWORD=$(grep <"${PASSWORD_FILE}" ' BarbicanPassword:' | awk -F ': ' 
 BARBICANKEK_PASSWORD=$(grep <"${PASSWORD_FILE}" ' BarbicanSimpleCryptoKek:' | awk -F ': ' '{ print $2; }')
 CEILOMETER_METERING_SECRET=$(grep <"${PASSWORD_FILE}" ' CeilometerMeteringSecret:' | awk -F ': ' '{ print $2; }')
 CEILOMETER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CeilometerPassword:' | awk -F ': ' '{ print $2; }')
-CINDER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CinderPassword:' | awk -F ': ' '{ print $2; }' )
+CINDER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CinderPassword:' | awk -F ': ' '{ print $2; }')
 CONGRESS_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CongressPassword:' | awk -F ': ' '{ print $2; }')
 DESIGNATE_PASSWORD=$(grep <"${PASSWORD_FILE}" ' DesignatePassword:' | awk -F ': ' '{ print $2; }')
 GLANCE_PASSWORD=$(grep <"${PASSWORD_FILE}" ' GlancePassword:' | awk -F ': ' '{ print $2; }')
@@ -262,14 +270,16 @@ oc set data secret/osp-secret "NovaPassword=$NOVA_PASSWORD"
 oc set data secret/osp-secret "OctaviaPassword=$OCTAVIA_PASSWORD"
 oc set data secret/osp-secret "PlacementPassword=$PLACEMENT_PASSWORD"
 
-oc apply -f yamls/openstackcontrolplane.yaml
+oc apply -f yamls/openstackcontrolplane.yaml || {
+    echo "Failed to apply openstackcontrolplane"
+    exit 1
+}
 
 #TODO wait for Ready
 if ! oc wait openstackcontrolplane openstack --for condition=Ready --timeout=600s; then
     echo "Failed to wait for openstackcontrolplane to be Ready"
     exit 1
 fi
-
 
 # permissions were wrong on the rabbitmq-cell1 pods mnesia folder for some reason
 # changing the permission caused it to work
