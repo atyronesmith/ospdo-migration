@@ -2,13 +2,13 @@ apiVersion: network.openstack.org/v1beta1
 kind: NetConfig
 metadata:
   name: openstacknetconfig
-  namespace: openstack
+  namespace: ${OSP18_NAMESPACE}
 spec:
   networks:
-    - name: ctlplane-rhoso
-      dnsDomain: ctlplane-rhoso.osptest.test.metalkube.org
+    - name: ctlplane-osp18
+      dnsDomain: ctlplane-osp18.osptest.test.metalkube.org
       subnets:
-        - name: ctlplane-rhoso
+        - name: ctlplane-osp18
           allocationRanges:
           - end: 172.22.0.149
             start: 172.22.0.100
@@ -16,20 +16,20 @@ spec:
           gateway: 172.22.0.1
           routes: []
           vlan: 0
-    - name: internalapi-rhoso
-      dnsDomain: internalapi-rhoso.osptest.test.metalkube.org
+    - name: internalapi-osp18
+      dnsDomain: internalapi-osp18.osptest.test.metalkube.org
       subnets:
-        - name: internalapi-rhoso
+        - name: internalapi-osp18
           allocationRanges:
           - end: 172.17.0.149
             start: 172.17.0.100
           cidr: 172.17.0.0/24
           routes: []
           vlan: 20
-    - name: external-rhoso
-      dnsDomain: external-rhoso.osptest.test.metalkube.org
+    - name: external-osp18
+      dnsDomain: external-osp18.osptest.test.metalkube.org
       subnets:
-        - name: external-rhoso
+        - name: external-osp18
           allocationRanges:
             - end: 10.0.0.149
               start: 10.0.0.100
@@ -37,30 +37,30 @@ spec:
           gateway: 10.0.0.1
           routes: []          
           vlan: 0
-    - name: storage-rhoso
-      dnsDomain: storage-rhoso.osptest.test.metalkube.org
+    - name: storage-osp18
+      dnsDomain: storage-osp18.osptest.test.metalkube.org
       subnets:
-        - name: storage-rhoso
+        - name: storage-osp18
           allocationRanges:
           - end: 172.18.0.149
             start: 172.18.0.100
           cidr: 172.18.0.0/24
           routes: []
           vlan: 30
-    - name: storagemgmt-rhoso
-      dnsDomain: storagemgmt-rhoso.osptest.test.metalkube.org
+    - name: storagemgmt-osp18
+      dnsDomain: storagemgmt-osp18.osptest.test.metalkube.org
       subnets:
-        - name: storagemgmt-rhoso
+        - name: storagemgmt-osp18
           allocationRanges:
           - end: 172.19.0.149
             start: 172.19.0.100
           cidr: 172.19.0.0/24
           routes: []
           vlan: 40
-    - name: tenant-rhoso
-      dnsDomain: tenant-rhoso.osptest.test.metalkube.org
+    - name: tenant-osp18
+      dnsDomain: tenant-osp18.osptest.test.metalkube.org
       subnets:
-        - name: tenant-rhoso
+        - name: tenant-osp18
           allocationRanges:
           - end: 172.20.0.149
             start: 172.20.0.100

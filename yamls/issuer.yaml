@@ -2,7 +2,7 @@ apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
   name: rootca-internal
-  namespace: openstack
+  namespace: ${OSP18_NAMESPACE}
   labels:
     osp-rootca-issuer-public: ""
     osp-rootca-issuer-internal: ""

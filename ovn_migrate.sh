@@ -9,12 +9,12 @@ SOURCE_OVSDB_IP=172.17.0.160 # TODO - get this from the source OVN DB
 export SOURCE_OVSDB_IP
 
 usage() {
-    echo "Usage: $0 <migrate|stop-rhoso-ovn|stop-ospdo-ovn>"
+    echo "Usage: $0 <migrate|stop-osp18-ovn|stop-ospdo-ovn>"
     exit 1
 }
 
-prepare_for_rhoso_ovn_start() {
-    echo "Stopping ovn services in RHOSO"
+prepare_for_osp18_ovn_start() {
+    echo "Stopping ovn services in OSP 18"
     if ! oc patch openstackcontrolplane openstack --type=merge --patch '
 spec:
   ovn:
@@ -24,15 +24,15 @@ spec:
         ovndbcluster-nb:
           dbType: NB
           storageRequest: 10G
-          networkAttachment: internalapi-rhoso
+          networkAttachment: internalapi-osp18
         ovndbcluster-sb:
           dbType: SB
           storageRequest: 10G
-          networkAttachment: internalapi-rhoso
+          networkAttachment: internalapi-osp18
       ovnNorthd:
         replicas: 0
       ovnController:
-        networkAttachment: tenant-rhoso
+        networkAttachment: tenant-osp18
         nodeSelector:
           node: non-existing-node-name
 '; then
@@ -50,10 +50,10 @@ spec:
 
 migrate() {
     echo "Creating ovn-data-cert secret"
-    if ! oc apply -f yamls/ovn-data-cert.yaml >/dev/null; then
+    envsubst <yamls/ovn-data-cert.yaml | oc apply -f - >/dev/null || {
         echo "ERROR: Failed to create ovn-data-cert secret"
         exit 1
-    fi
+    }
 
     echo "Creating ovn-data-pvc"
     envsubst <yamls/ovn-data-pvc.yaml | oc apply -f - || {
@@ -68,24 +68,24 @@ migrate() {
     }
 
     echo "Waiting for ovn-copy-data pod to start"
-    oc wait --for=condition=Ready pod/ovn-copy-data --timeout=30s || {
+    oc -n "${OSP18_NAMESPACE}" wait --for=condition=Ready pod/ovn-copy-data --timeout=30s || {
         echo "ERROR: ovn-copy-data pod did not start"
         exit 1
     }
 
     echo "Create backup of NB DB"
-    if ! oc exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6641 > /backup/ovs-nb.db"; then
+    oc -n "${OSP18_NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6641 > /backup/ovs-nb.db" || {
         echo "ERROR: Failed to backup OVN NB DB"
         exit 1
-    fi
+    }
 
     echo "Create backup of SB DB"
-    if ! oc exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6642 > /backup/ovs-sb.db"; then
+    oc exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6642 > /backup/ovs-sb.db" || {
         echo "ERROR: Failed to backup OVN SB DB"
         exit 1
-    fi
+    }
 
-    echo "Starting ovn service in RHOSO"
+    echo "Starting ovn service in OSP 18"
     oc patch openstackcontrolplane openstack --type=merge --patch '
 spec:
   ovn:
@@ -95,15 +95,15 @@ spec:
         ovndbcluster-nb:
           dbType: NB
           storageRequest: 10G
-          networkAttachment: internalapi-rhoso
+          networkAttachment: internalapi-osp18
         ovndbcluster-sb:
           dbType: SB
           storageRequest: 10G
-          networkAttachment: internalapi-rhoso
+          networkAttachment: internalapi-osp18
       ovnNorthd:
         replicas: 0
       ovnController:
-        networkAttachment: tenant-rhoso
+        networkAttachment: tenant-osp18
         nodeSelector:
           node: non-existing-node-name
 '
@@ -125,13 +125,13 @@ spec:
 
     # TODO -- wait for svc to start
 
-    echo "Getting OVN NB DB IPs in RHOSO"
+    echo "Getting OVN NB DB IPs in OSP 18"
     if ! PODIFIED_OVSDB_NB_IP=$(oc get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-nb-0" -ojsonpath='{.items[0].spec.clusterIP}'); then
         echo "ERROR: Failed to get OVN NB DB IP"
         exit 1
     fi
 
-    echo "Getting OVN SB DB IPs in RHOSO"
+    echo "Getting OVN SB DB IPs in OSP 18"
     if ! PODIFIED_OVSDB_SB_IP=$(oc get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-sb-0" -ojsonpath='{.items[0].spec.clusterIP}'); then
         echo "ERROR: Failed to get OVN SB DB IP"
         exit 1
@@ -151,14 +151,14 @@ spec:
         exit 1
     fi
 
-    echo "Restoring OVN NB DB from OSPdO to RHOSO"
+    echo "Restoring OVN NB DB from OSPdO to OSP 18"
     if ! oc exec ovn-copy-data -- bash -c "ovsdb-client restore --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
    --certificate=/etc/pki/tls/misc/tls.crt ssl:$PODIFIED_OVSDB_NB_IP:6641 < /backup/ovs-nb.db"; then
         echo "ERROR: Failed to restore OVN NB DB"
         exit 1
     fi
 
-    echo "Restoring OVN SB DB from OSPdO to RHOSO"
+    echo "Restoring OVN SB DB from OSPdO to OSP 18"
     if ! oc exec ovn-copy-data -- bash -c "ovsdb-client restore --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
     --certificate=/etc/pki/tls/misc/tls.crt ssl:$PODIFIED_OVSDB_SB_IP:6642 < /backup/ovs-sb.db"; then
         echo "ERROR: Failed to restore OVN SB DB"
@@ -230,12 +230,12 @@ fi
 
 case $1 in
 migrate)
-    prepare_for_rhoso_ovn_start
+    prepare_for_osp18_ovn_start
     migrate
     stop_ospdo_ovn
     ;;
-stop-rhoso-ovn)
-    prepare_for_rhoso_ovn_start
+stop-osp18-ovn)
+    prepare_for_osp18_ovn_start
     ;;
 stop-ospdo-ovn)
     stop_ospdo_ovn

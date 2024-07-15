@@ -1,13 +1,13 @@
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: ctlplane-rhoso
-  namespace: openstack
+  name: ctlplane-osp18
+  namespace: ${OSP18_NAMESPACE}
 spec:
   config: |
     {
       "cniVersion": "0.3.1",
-      "name": "ctlplane-rhoso",
+      "name": "ctlplane-osp18",
       "type": "bridge",
       "master": "br-ctlplane",
       "ipam": {
@@ -21,13 +21,13 @@ spec:
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: internalapi-rhoso
-  namespace: openstack
+  name: internalapi-osp18
+  namespace: ${OSP18_NAMESPACE}
 spec:
   config: |
     {
       "cniVersion": "0.3.1",
-      "name": "internalapi-rhoso",
+      "name": "internalapi-osp18",
       "type": "macvlan",
       "master": "enp7s0.20",
       "ipam": {
@@ -41,13 +41,13 @@ spec:
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: external-rhoso
-  namespace: openstack
+  name: external-osp18
+  namespace: ${OSP18_NAMESPACE}
 spec:
   config: |
     {
       "cniVersion": "0.3.1",
-      "name": "external-rhoso",
+      "name": "external-osp18",
       "type": "macvlan",
       "master": "br-external",
       "ipam": {
@@ -61,13 +61,13 @@ spec:
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: storage-rhoso
-  namespace: openstack
+  name: storage-osp18
+  namespace: ${OSP18_NAMESPACE}
 spec:
   config: |
     {
       "cniVersion": "0.3.1",
-      "name": "storage-rhoso",
+      "name": "storage-osp18",
       "type": "macvlan",
       "master": "enp7s0.30",
       "ipam": {
@@ -81,13 +81,13 @@ spec:
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: storagemgmt-rhoso
-  namespace: openstack
+  name: storagemgmt-osp18
+  namespace: ${OSP18_NAMESPACE}
 spec:
   config: |
     {
       "cniVersion": "0.3.1",
-      "name": "storagemgmt-rhoso",
+      "name": "storagemgmt-osp18",
       "type": "macvlan",
       "master": "enp7s0.40",
       "ipam": {
@@ -101,13 +101,13 @@ spec:
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: tenant-rhoso
-  namespace: openstack
+  name: tenant-osp18
+  namespace: ${OSP18_NAMESPACE}
 spec:
   config: |
     {
       "cniVersion": "0.3.1",
-      "name": "tenant-rhoso",
+      "name": "tenant-osp18",
       "type": "macvlan",
       "master": "enp7s0.50",
       "ipam": {

@@ -3,7 +3,7 @@ kind: NodeNetworkConfigurationPolicy
 metadata:
   labels:
     osp/interface: enp7s0
-  name: enp7s0-${RHOSO_NODE1}
+  name: enp7s0-${OSP18_NODE1}
 spec:
   # This does not get inherited by every service!
   nodeSelector:
@@ -114,5 +114,5 @@ spec:
         port:
         - name: enp6s0
   nodeSelector:
-    kubernetes.io/hostname: ${RHOSO_NODE1}
+    kubernetes.io/hostname: ${OSP18_NODE1}
     node-role.kubernetes.io/worker: ""

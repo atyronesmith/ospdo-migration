@@ -2,7 +2,7 @@ apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
   namespace: metallb-system
-  name: ctlplane-rhoso
+  name: ctlplane-osp18
 spec:
   addresses:
     - 172.22.0.80-172.22.0.90
@@ -12,7 +12,7 @@ spec:
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
-  name: internalapi-rhoso
+  name: internalapi-osp18
   namespace: metallb-system
 spec:
   addresses:

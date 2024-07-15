@@ -2,14 +2,23 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: mariadb-copy-data
+  namespace: ${NAMESPACE}
   annotations:
     openshift.io/scc: anyuid
-    k8s.v1.cni.cncf.io/networks: ${INTERNAL_API_NET}
+    k8s.v1.cni.cncf.io/networks: |-
+      [
+        {
+          "name": "${NETWORK}", 
+          "namespace": "${NAMESPACE}", 
+          "ips": ["172.17.0.99/24"] 
+        }
+      ]
   labels:
     app: adoption
 spec:
+  nodeName: ${TARGET_NODE}
   containers:
-  - image: $MARIADB_IMAGE
+  - image: ${IMAGE}
     command: [ "sh", "-c", "sleep infinity"]
     name: adoption
     volumeMounts:

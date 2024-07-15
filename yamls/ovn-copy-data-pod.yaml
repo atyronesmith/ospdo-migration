@@ -2,14 +2,23 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: ovn-copy-data
+  namespace: ${OSP18_NAMESPACE}
   annotations:
     openshift.io/scc: anyuid
-    k8s.v1.cni.cncf.io/networks: internalapi
+    k8s.v1.cni.cncf.io/networks: |-
+      [
+        {
+          "name": "internalapi-osp18", 
+          "namespace": "${OSP18_NAMESPACE}"
+        }
+      ]
   labels:
     app: adoption
 spec:
+  nodeSelector:
+    type: openstack
   containers:
-  - image: $OVSDB_IMAGE
+  - image: ${OVSDB_IMAGE}
     command: [ "sh", "-c", "sleep infinity"]
     name: adoption
     volumeMounts:

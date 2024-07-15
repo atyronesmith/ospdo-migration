@@ -3,7 +3,7 @@ kind: NodeNetworkConfigurationPolicy
 metadata:
   labels:
     osp/interface: enp7s0
-  name: enp7s0-${RHOSO_NODE2}
+  name: enp7s0-${OSP18_NODE2}
 spec:
   desiredState:
     dns-resolver:
@@ -111,5 +111,5 @@ spec:
         port:
         - name: enp6s0
   nodeSelector:
-    kubernetes.io/hostname: ${RHOSO_NODE2}
+    kubernetes.io/hostname: ${OSP18_NODE2}
     node-role.kubernetes.io/worker: ""

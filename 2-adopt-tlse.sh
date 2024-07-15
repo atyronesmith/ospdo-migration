@@ -1,5 +1,7 @@
 #!/bin/bash
 
+. common.sh
+
 # For OSPdO installed by director-dev-tools, the server host runs the freeipa server as a container...
 IPA_SSH="podman exec -ti freeipa-server"
 
@@ -27,19 +29,21 @@ $IPA_SSH pk12util -o /tmp/freeipa.p12 -n 'caSigningCert cert-pki-ca' \
 }
 
 # Create the secret that contains the root CA
-oc get secret rootca-internal >/dev/null 2>&1 || {
-    oc create secret generic rootca-internal
+oc get secret rootca-internal -n ${OSP18_NAMESPACE} >/dev/null 2>&1 || {
+    oc create secret generic rootca-internal -n ${OSP18_NAMESPACE} || {
+        echo "Unable to create secret rootca-internal..."
+        exit 1
+    }
 }
 
-
-oc patch secret rootca-internal -n openstack -p="{\"data\":{\"ca.crt\": \
+oc patch secret rootca-internal -n ${OSP18_NAMESPACE} -p="{\"data\":{\"ca.crt\": \
     \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
     -nokeys | openssl x509 | base64 -w 0)\"}}" || {
     echo "Unable to patch secret ca.crt."
     exit 1
 }
 
-oc patch secret rootca-internal -n openstack -p="{\"data\":{\"tls.crt\": \
+oc patch secret rootca-internal -n ${OSP18_NAMESPACE} -p="{\"data\":{\"tls.crt\": \
     \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
     -nokeys | openssl x509 | base64 -w 0)\"}}" || {
     echo "Unable to patch secret tls.crt."
@@ -47,33 +51,30 @@ oc patch secret rootca-internal -n openstack -p="{\"data\":{\"tls.crt\": \
 }
 
 OPENSSL_OPTION_NOENC='-noenc'
-$IPA_SSH openssl version | grep '1.1.1' >/dev/null 2>&1 || {
+$IPA_SSH openssl version | grep '1.1.1' >/dev/null 2>&1 && {
     OPENSSL_OPTION_NOENC='-nodes'
 }
 
 # openssl pkcs12 version is 1.1.1 in what is deployed
 #  documentation assumes version 3+
-oc patch secret rootca-internal -n openstack -p="{\"data\":{\"tls.key\": \
+oc patch secret rootca-internal -n ${OSP18_NAMESPACE} -p="{\"data\":{\"tls.key\": \
     \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
     -nocerts "${OPENSSL_OPTION_NOENC}" | openssl rsa | base64 -w 0)\"}}" || {
     echo "Unable to patch secret tls.crt."
     exit 1
 }
 
-oc apply -f yamls/issuer.yaml || {
+envsubst <yamls/issuer.yaml | oc apply -f - || {
     echo "Unable to apply Issuer!"
     exit 1
 }
 
-issuer_status=$(oc get issuers -n openstack -o jsonpath='{.items[0].status.conditions[0].status}') || {
+issuer_status=$(oc get issuers -n ${OSP18_NAMESPACE} -o jsonpath='{.items[0].status.conditions[0].status}') || {
     echo "Failed to get issuers status."
     exit 1
 }
 
-if [[ "$issuer_status" == "True" ]]; then
-    echo "Issuer Ready"
-else
-    echo "Issuer status is not True"
-fi
+[[ "$issuer_status" == "True" ]] && echo "Issuer Ready" || echo "Issuer status is not True"
+
 
 

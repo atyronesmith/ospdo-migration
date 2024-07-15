@@ -1,5 +1,5 @@
 # ospdo-migration
-Files related to OSPdO migration to RHOSO
+Files related to OSPdO migration to OSP 18
 
 The bash script run various stages related to 
 the adoption process.
