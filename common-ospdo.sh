@@ -16,10 +16,6 @@ export CONTROLLER_NODE
 CONTROLLER_SSH="oc rsh -n $OSPDO_NAMESPACE -c openstackclient openstackclient ssh controller-0.ctlplane"
 export CONTROLLER_SSH
 
-# shellcheck disable=SC2034
-OS_CLIENT="oc rsh -n $OSPDO_NAMESPACE -c openstackclient openstackclient "
-export OS_CLIENT
-
 CONTROLLER1_SSH="oc -n $OSPDO_NAMESPACE rsh -c openstackclient openstackclient ssh controller-0.ctlplane"
 export CONTROLLER1_SSH
 CONTROLLER2_SSH=

@@ -127,6 +127,7 @@ deploy_backend_services_3_2() {
     OCTAVIA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' OctaviaPassword:' | awk -F ': ' '{ print $2; }')
     PLACEMENT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' PlacementPassword:' | awk -F ': ' '{ print $2; }')
     MYSQLROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -F ': ' '{ print $2; }')
+    SWIFT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' SwiftPassword:' | awk -F ': ' '{ print $2; }') 
 
     oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "AdminPassword=$ADMIN_PASSWORD"
 
@@ -149,6 +150,9 @@ deploy_backend_services_3_2() {
     oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "NovaPassword=$NOVA_PASSWORD"
     oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "OctaviaPassword=$OCTAVIA_PASSWORD"
     oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "PlacementPassword=$PLACEMENT_PASSWORD"
+    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "SwiftPassword=$SWIFT_PASSWORD"
+
+    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "MetadataSecret=12345678"
 
     envsubst <yamls/openstackcontrolplane.yaml | oc apply -f - || {
         echo "Failed to apply openstackcontrolplane"
