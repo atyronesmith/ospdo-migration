@@ -1,2 +1,4 @@
 tls-certs.yaml
 tripleo-passwords.yaml
+*.conf
+
