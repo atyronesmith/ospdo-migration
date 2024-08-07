@@ -51,6 +51,7 @@ export OSP18_NODE1
 OSP18_NODE2=$(echo "${NG_NODES}" | cut -d ' ' -f 2)
 export OSP18_NODE2
 
+echo "Label nodes..."
 oc label nodes "${OSP18_NODE1}" type=openstack || {
     echo "Failed to label node1"
     exit 1
@@ -60,6 +61,14 @@ oc label nodes "${OSP18_NODE2}" type=openstack || {
     exit 1
 }
 
+oc get namespace ${OSP18_NAMESPACE} 2>/dev/null || {
+    oc create namespace ${OSP18_NAMESPACE} || {
+        echo "Failed to create namespace ${OSP18_NAMESPACE}"
+        exit 1
+    }
+}
+
+echo "Apply nncp..."
 # create and apply custom NNCPs for OSP 18
 # the NNCPs should obey the labels applied above
 envsubst <yamls/node1-nncp.yaml | oc apply -f - || {
@@ -70,6 +79,8 @@ envsubst <yamls/node2-nncp.yaml | oc apply -f - || {
     echo "Failed to set apply node2-nncp.yaml"
     exit 1
 }
+
+echo "Apply NetworkAttachmentDefinition"
 
 envsubst <yamls/nads.yaml | oc apply -f - || {
     echo "Failed to apply net-attach-defs..."

@@ -23,7 +23,7 @@ export CONTROLLER2_SSH
 CONTROLLER3_SSH=
 export CONTROLLER3_SSH
 
-OSPDO_INTERNAL_API_NET="internalapi"
+OSPDO_INTERNAL_API_NET="internalapi-static"
 export OSPDO_INTERNAL_API_NET
 
 # shellcheck disable=SC2034
@@ -31,9 +31,9 @@ readarray -t OSPDO_COMPUTE < <(oc get -n $OSPDO_NAMESPACE osipset/compute -ojson
 # shellcheck disable=SC2034
 readarray -t OSPDO_CONTROLLER < <(oc get -n $OSPDO_NAMESPACE  osipset/controller -ojson | jq -S '.status.hosts|keys[]')
 # shellcheck disable=SC2034
-readarray -t OSPDO_COMPUTE_IP < <(oc get -n $OSPDO_NAMESPACE osipset/compute -ojson | jq -S '.status.hosts[].ipaddresses.'"$OSPDO_INTERNAL_API_NET"'')
+readarray -t OSPDO_COMPUTE_IP < <(oc get -n $OSPDO_NAMESPACE osipset/compute -ojson | jq -S '.status.hosts[].ipaddresses.internal_api')
 # shellcheck disable=SC2034
-readarray -t OSPDO_CONTROLLER_IP < <(oc get -n $OSPDO_NAMESPACE osipset/controller -ojson | jq -S '.status.hosts[].ipaddresses.'"$OSPDO_INTERNAL_API_NET"'')
+readarray -t OSPDO_CONTROLLER_IP < <(oc get -n $OSPDO_NAMESPACE osipset/controller -ojson | jq -S '.status.hosts[].ipaddresses.internal_api')
 
 # shellcheck disable=SC2034
 STORAGE_CLASS=$(oc get -n $OSPDO_NAMESPACE pvc openstackclient-hosts -o jsonpath='{.spec.storageClassName}')

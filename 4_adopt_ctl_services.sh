@@ -27,7 +27,7 @@ export FERNET_KEYS1
 # Create an alias to use openstack command in the adopted deployment:
 #alias openstack="oc exec -t openstackclient -- openstack"
 
-adopt_identry_server_4_1() {
+adopt_identry_service_4_1() {
   echo "Creating keys..."
   envsubst <yamls/openstack-secret.yaml | oc apply -f - || {
     echo "Failed to apply openstack-secret.yaml"
@@ -55,15 +55,23 @@ spec:
       databaseInstance: openstack
       secret: osp-secret
 '
+  echo "Wait for openstackcontrolplane to be Ready"
+  oc wait openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --for condition=Ready --timeout=600s || {
+    echo "Failed to wait for openstackcontrolplane to be Ready"
+    exit 1
+  }
 
   # Clean up old services and endpoints that still point to the old control plane, excluding the Identity service and its endpoints
-  $OS_CLIENT openstack endpoint list | grep keystone | awk '/admin/{ print $2; }' | xargs "${BASH_ALIASES[openstack]}" endpoint delete || true
+  $OS_CLIENT openstack endpoint list | grep keystone | awk '/admin/{ print $2; }' | xargs -t $OS_CLIENT openstack endpoint delete || true
 
   for service in aodh heat heat-cfn barbican cinderv3 glance manila manilav2 neutron nova placement swift ironic-inspector ironic; do
-    $OS_CLIENT openstack service list | awk "/ $service /{ print \$2; }" | xargs "${BASH_ALIASES[openstack]}" service delete || true
+    $OS_CLIENT openstack service list | awk "/ $service /{ print \$2; }" | xargs -t $OS_CLIENT openstack service delete || true
   done
 
-  $OS_CLIENT openstack endpoint list | grep keystone
+  $OS_CLIENT openstack endpoint list | grep keystone || {
+    echo "ERROR: Keystone endpoint is missing"
+    exit 1
+  }
 }
 
 adopt_key_manager_4_2() {
@@ -255,36 +263,59 @@ spec:
     exit 1
   }
 
-  echo "Hello World!" >obj
+  sleep 5
+  
+  test_string="Hello World!"
+  echo "$test_string" >obj
+  oc -n ${OSP18_NAMESPACE} cp obj openstackclient:/tmp/obj || {
+    echo "ERROR: Failed to copy object to openstackclient"
+    exit 1
+  }
+
+  echo "Creating container"
   $OS_CLIENT openstack container create test || {
     echo "ERROR: Failed to create container"
     exit 1
   }
-
-  $OS_CLIENT openstack object create test obj || {
+  echo "Creating object"
+  $OS_CLIENT openstack object create test /tmp/obj || {
     echo "ERROR: Failed to create object"
     exit 1
   }
-
-  $OS_CLIENT openstack object save test obj --file -
-
+  echo "Saving object"
+  ts=$($OS_CLIENT openstack object save test /tmp/obj --file -) || {
+    echo "ERROR: Failed to save object to file"
+    exit 1
+  }
+  [ "$ts" == "$test_string" ] || {
+    echo "ERROR: Saved object is incorrect"
+    exit 1
+  }
 }
 
 adopt_image_service_4_5() {
   oc patch openstackcontrolplane openstack --type=merge --patch-file=yamls/glance_swift.patch
 
-  #TODO wait for start of pod and then check
-  sleep 10
+  echo "Wait for Glance pod to start"
+  while ! oc get pod --selector=service=glance -n ${OSP18_NAMESPACE} | grep glance; do sleep 10; done
 
-  $OS_CLIENT service list | grep image || {
+  echo "Wait for Glance pod to be ready"
+  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=glance || {
+    echo "ERROR: Failed to start glance pod"
+    exit 1
+  }
+  echo "Check for glance service"
+  $OS_CLIENT openstack service list | grep image || {
     echo "ERROR: Failed to create image service"
     exit 1
   }
-  $OS_CLIENT endpoint list | grep image || {
+  echo "Check for glance endpoint"
+  $OS_CLIENT openstack endpoint list | grep image || {
     echo "ERROR: Failed to create image endpoint"
     exit 1
   }
-  $OS_CLIENT image list || {
+  echo "Check for images"
+  $OS_CLIENT openstack image list || {
     echo "ERROR: Failed to list images"
     exit 1
   }
@@ -313,6 +344,16 @@ spec:
             spec:
               type: LoadBalancer
 '
+  echo "Wait for Glance pod to start"
+  while ! oc get pod --selector=service=placement -n ${OSP18_NAMESPACE} | grep placement; do sleep 10; done
+
+  echo "Wait for Glance pod to be ready"
+  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=placement || {
+    echo "ERROR: Failed to start glance pod"
+    exit 1
+  }
+
+  #Even with the pod ready neet to wait
   sleep 10
 
   $OS_CLIENT openstack endpoint list | grep placement
@@ -326,7 +367,7 @@ spec:
   oc exec -t openstackclient -- curl "$PLACEMENT_PUBLIC_URL"
 
   # With OpenStack CLI placement plugin installed:
-  openstack resource class list || {
+  $OS_CLIENT openstack resource class list || {
     echo "ERROR: Failed to list resource classes"
     exit 1
   }
@@ -351,8 +392,8 @@ spec:
             internal:
               metadata:
                 annotations:
-                  metallb.universe.tf/address-pool: internalapi-osp
-                  metallb.universe.tf/allow-shared-ip: internalapi-osp
+                  metallb.universe.tf/address-pool: internalapi-osp18
+                  metallb.universe.tf/allow-shared-ip: internalapi-osp18
                   metallb.universe.tf/loadBalancerIPs: 172.17.0.80
               spec:
                 type: LoadBalancer
@@ -403,10 +444,24 @@ spec:
               [workarounds]
               disable_compute_service_check_for_ffu=true
 '
-  # TODO check for nova service
-  sleep 10
-  $OS_CLIENT openstack endpoint list | grep nova
-  $OS_CLIENT openstack server list
+
+  echo "Wait for Nova pod to start"
+  while ! oc get pod --selector=service=nova-api -n ${OSP18_NAMESPACE} | grep nova-api; do sleep 10; done
+
+  echo "Wait for Nova pod to be ready"
+  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=nova-api || {
+    echo "ERROR: Failed to start nova pod"
+    exit 1
+  }
+
+  $OS_CLIENT openstack endpoint list | grep nova || {
+    echo "ERROR: Failed to create nova endpoint"
+    exit 1
+  }
+  $OS_CLIENT openstack server list || {
+    echo "ERROR: Failed to list servers"
+    exit 1
+  }
 
   # . ~/.source_cloud_exported_variables
   # echo $PULL_OPENSTACK_CONFIGURATION_NOVAMANAGE_CELL_MAPPINGS
@@ -431,15 +486,38 @@ adopt_block_storage_4_8() {
   # oc apply -f yamls/iscsid-mc.yaml || {
   #   echo "Failed to apply iscsid-mc.yaml"
   #   exit 1
-  # } 
+  # }
 
-  $CONTROLLER1_SSH sudo cat /var/lib/config-data/puppet-generated/cinder/etc/cinder/cinder.conf > cinder.conf
+  $CONTROLLER1_SSH sudo cat /var/lib/config-data/puppet-generated/cinder/etc/cinder/cinder.conf >cinder.conf
   oc patch openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --type=merge --patch-file=yamls/cinder.patch
 }
 
+adopt_dashboard_service_4_9() {
+  oc patch openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --type=merge --patch '
+spec:
+  horizon:
+    enabled: true
+    apiOverride:
+      route: {}
+    template:
+      memcachedInstance: memcached
+      secret: osp-secret  
+'
+
+  echo "Wait for Horizon pod to start"
+  while ! oc get pod --selector=service=horizon -n ${OSP18_NAMESPACE} | grep horizon; do sleep 10; done
+
+  echo "Wait for Horizon pod to be ready"
+  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=horizon || {
+    echo "ERROR: Failed to start horizon pod"
+    exit 1
+  }
+
+}
+
 case $1 in
-adopt-identry-server | 4_1)
-  adopt_identry_server_4_1
+adopt-identry-service| 4_1)
+  adopt_identry_service_4_1
   ;;
 adopt-key-manager | 4_2)
   adopt_key_manager_4_2
@@ -450,14 +528,23 @@ adopt-networking | 4_3)
 adopt-object-storage | 4_4)
   adopting_object_storage_4_4
   ;;
+adopt-image-service | 4_5)
+  adopt_image_service_4_5
+  ;;
 adopt-placement | 4_6)
   adopt_placement_4_6
   ;;
 adopt-compute | 4_7)
   adopt_compute_service_4_7
   ;;
+adopt-block-storage | 4_8)
+  adopt_block_storage_4_8
+  ;;
+adopt-dashboard | 4_9)
+  adopt_dashboard_service_4_9
+  ;;
 all)
-  adopt_identry_server_4_1
+  adopt_identry_service_4_1
   adopt_key_manager_4_2
   adopt_networking_4_3
   adopting_object_storage_4_4

@@ -81,9 +81,11 @@ retrieve_topology_3_1() {
 
     # Get the SR-IOV agents from the database
     echo "Get the SR-IOV agents from the database"
-    SRIOV_AGENTS=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" -it --rm --restart=Never --overrides="$RUN_OVERRIDES" -- mysql -rsh "$SOURCE_MARIADB_IP" \
+    SRIOV_AGENTS=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" -it --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" \
         -uroot -p"$SOURCE_DB_ROOT_PASSWORD" ovs_neutron -e "select host, configurations from agents where agents.binary='neutron-sriov-nic-agent';")
-
+    export SRIOV_AGENTS
+    echo "$SRIOV_AGENTS"
+    
     # Store exported variables for future use
     cat >~/.source_cloud_exported_variables <<EOF
 PULL_OPENSTACK_CONFIGURATION_DATABASES="$PULL_OPENSTACK_CONFIGURATION_DATABASES"
@@ -159,18 +161,23 @@ deploy_backend_services_3_2() {
         exit 1
     }
 
-    #TODO wait for Ready
-    oc wait openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --for condition=Ready --timeout=600s || {
-        echo "Failed to wait for openstackcontrolplane to be Ready"
-        exit 1
-    }
+    # Cannot check for openstackcontrolplane to be ready as it will not be ready until 
+    # openstackclient is deployed.  openstackclient cannot be deployed until Keystone is
+    # available.
+    # echo "Wait for openstackcontrolplane to be Ready"
+    # oc wait openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --for condition=Ready --timeout=600s || {
+    #     echo "Failed to wait for openstackcontrolplane to be Ready"
+    #     exit 1
+    # }
 
+    echo "Wait for galera-0..."
     oc wait pod openstack-galera-0 -n ${OSP18_NAMESPACE} --for=jsonpath='{.status.phase}'=Running --timeout=30s || {
         echo "ERROR: Galera pod did not start"
         exit 1
     }
 
-    oc wait pod openstack-cell1-galera-0 -o -n ${OSP18_NAMESPACE} --for=jsonpath='{.status.phase}'=Running --timeout=30s || {
+    echo "Wait for cell1-galera-0 to be Ready"
+    oc wait pod openstack-cell1-galera-0 -n ${OSP18_NAMESPACE} --for=jsonpath='{.status.phase}'=Running --timeout=30s || {
         echo "ERROR: Galera cell1 pod did not start"
         exit 1
     }
@@ -209,9 +216,11 @@ create_mariadb_data() {
     local network=$2
     local target_node=$3
 
+    echo "Check for mariadb-data pvc"
     oc get pvc mariadb-data -n "${ns}" >/dev/null 2>&1 || {
         export NAMESPACE="$ns"
         export STORAGE_CLASS="${STORAGE_CLASS}"
+        echo "Creating mariadb-data pvc"
         # shellcheck disable=SC2016
         envsubst '$NAMESPACE,$STORAGE_CLASS' <yamls/mariadb-copy-data-pvc.yaml | oc apply -f -
         oc wait --for=jsonpath='{status.phase}'=Bound --timeout=30s pvc/mariadb-data -n "${ns}" || {
@@ -220,11 +229,13 @@ create_mariadb_data() {
         }
     }
 
+    echo "Check for mariadb-copy-data pod"
     oc get pod mariadb-copy-data -n "${ns}" >/dev/null 2>&1 || {
         export NAMESPACE="$ns"
         export NETWORK="$network"
         export TARGET_NODE="$target_node"
         export IMAGE=${MARIADB_IMAGE}
+        echo "Creating mariadb-copy-data pod"
         # TODO need to automate the allocation of an IP address for mariadb-copy-data pod
         # shellcheck disable=SC2016
         envsubst '$NAMESPACE,$NETWORK,$TARGET_NODE,$IMAGE' <yamls/mariadb-copy-data-pod.yaml | oc apply -f - || {
@@ -296,7 +307,7 @@ migrate_mariadb_3_6() {
 EOF
 
     # Restore the databases from .sql files into the control plane MariaDB:
-    oc rsh mariadb-copy-data <<EOF
+    oc rsh -n "${OSPDO_NAMESPACE}" mariadb-copy-data <<EOF
   # db schemas to rename on import
   declare -A db_name_map
   db_name_map['nova']='nova_cell1'
@@ -657,6 +668,9 @@ migrate-ovn-data | 3_7)
     start_northd_13__14
     delete_ovn_copy_data_15
     stop_ospdo_ovn_svcs_16
+    ;;
+create-mariadb-data)
+    create_mariadb_data "${OSPDO_NAMESPACE}" "internalapi-static" "${CONTROLLER_NODE}" 
     ;;
 all)
     retrieve_topology_3_1
