@@ -264,7 +264,7 @@ spec:
   }
 
   sleep 5
-  
+
   test_string="Hello World!"
   echo "$test_string" >obj
   oc -n ${OSP18_NAMESPACE} cp obj openstackclient:/tmp/obj || {
@@ -515,8 +515,41 @@ spec:
 
 }
 
+adopt_orchestration_service_4_11() {
+  oc patch openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --type=merge --patch '
+spec:
+  heat:
+    enabled: true
+    apiOverride:
+      route: {}
+    template:
+      databaseInstance: openstack
+      databaseAccount: heat
+      secret: osp-secret
+      memcachedInstance: memcached
+      passwordSelectors:
+        authEncryptionKey: HeatAuthEncryptionKey
+        database: HeatDatabasePassword
+        service: HeatPassword
+'
+
+  echo "Wait for Heat pods to start"
+  for component in heat heat-api heat-cfnapi heat-engine; do
+    while ! oc get pod --selector='service=heat,component='$component'' -n ${OSP18_NAMESPACE} | grep "$component"; do sleep 10; done
+  done
+
+  echo "Wait for Horizon pods to be ready"
+  for component in heat heat-api heat-cfnapi heat-engine; do
+    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector='service=heat,component='$component'' -n ${OSP18_NAMESPACE} || {
+      echo "ERROR: Failed to start heat: $component"
+      exit 1
+    }
+  done
+
+}
+
 case $1 in
-adopt-identry-service| 4_1)
+adopt-identry-service | 4_1)
   adopt_identry_service_4_1
   ;;
 adopt-key-manager | 4_2)
@@ -542,6 +575,9 @@ adopt-block-storage | 4_8)
   ;;
 adopt-dashboard | 4_9)
   adopt_dashboard_service_4_9
+  ;;
+adopt-orchestration | 4_11)
+  adopt_orchestration_service_4_11
   ;;
 all)
   adopt_identry_service_4_1
