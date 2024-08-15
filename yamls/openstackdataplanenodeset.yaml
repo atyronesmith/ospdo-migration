@@ -147,6 +147,12 @@ spec:
         edpm_ovn_remote_probe_interval: 60000
         edpm_ovn_ofctrl_wait_before_clear: 8000
 
+        role_networks:
+          - ctlplane
+          - internal_api
+          - storage
+          - tenant
+
         timesync_ntp_servers:
           - hostname: clock.redhat.com
           - hostname: clock2.redhat.com

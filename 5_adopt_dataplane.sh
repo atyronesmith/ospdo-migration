@@ -118,6 +118,18 @@ get_node_info() {
     oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts'
     oc -n openstack get openstacknetconfigs.osp-director.openstack.org -ojson | jq -r '.items[0].spec | "Dns Servers : ", .dnsServers'
     oc -n openstack get openstacknetconfigs.osp-director.openstack.org -ojson | jq -r '.items[0].spec | "Dns Search Domains : ",  .dnsSearchDomains'
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts.ipaddresses'
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq -r '.items[0].spec | "role_networks:", "-", (.networks)'
+}
+
+gen_nodes() {
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | \
+       jq -r '.items[0].status.baremetalHosts| "nodes:", keys[] as $k | .[$k].ipaddresses as $a | 
+         "  \($k):", 
+         "    hostName: \($k)", 
+         "    ansible:",
+         "      ansibleHost: \($a["ctlplane"])",
+         "    networks:", ($a | to_entries[] | "    - name: \(.key) \n      fixedIP: \(.value)\n      subnetName: subnet1")'
 }
 
 case $1 in
@@ -130,8 +142,11 @@ case $1 in
 ovninfo)
     get_ovn_info
     ;;
-nodes)
+nodeinfo)
     get_node_info
+    ;;
+gennodes)
+    gen_nodes
     ;;
 *)
     echo "Invalid argument"
