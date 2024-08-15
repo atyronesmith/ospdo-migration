@@ -110,6 +110,16 @@ get_ovn_info() {
 
 }
 
+get_baremetal_nodes() {
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts'
+}
+
+get_node_info() {
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts'
+    oc -n openstack get openstacknetconfigs.osp-director.openstack.org -ojson | jq -r '.items[0].spec | "Dns Servers : ", .dnsServers'
+    oc -n openstack get openstacknetconfigs.osp-director.openstack.org -ojson | jq -r '.items[0].spec | "Dns Search Domains : ",  .dnsSearchDomains'
+}
+
 case $1 in
 5.1)
     stop_infra_services_5_1
@@ -119,6 +129,9 @@ case $1 in
     ;;
 ovninfo)
     get_ovn_info
+    ;;
+nodes)
+    get_node_info
     ;;
 *)
     echo "Invalid argument"

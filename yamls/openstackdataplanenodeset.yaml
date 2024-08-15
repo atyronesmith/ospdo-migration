@@ -131,6 +131,8 @@ spec:
         # considered EDPM network defaults.
         neutron_physical_bridge_name: br-ex
         neutron_public_interface_name: nic3
+        ctlplane_dns_nameservers: 172.22.0.1
+        dns_search_domains: "osptest.test.metalkube.org,test.metalkube.org"
 
         # edpm_nodes_validation
         edpm_nodes_validation_validate_controllers_icmp: false
