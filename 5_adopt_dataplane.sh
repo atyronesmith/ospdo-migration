@@ -78,8 +78,8 @@ metadata:
   name: subscription-manager
   namespace: ${OSP18_NAMESPACE}
 data:
-  username: echo ${SUBSCRIPTION_MANAGER_USERNAME} | base64
-  password: echo ${SUBSCRIPTION_MANAGER_PASSWORD} | base64
+  username: $(echo "${SUBSCRIPTION_MANAGER_USERNAME}" | base64)
+  password: $(echo "${SUBSCRIPTION_MANAGER_PASSWORD}" | base64)
 ---
 apiVersion: v1
 kind: Secret
@@ -87,8 +87,8 @@ metadata:
   name: redhat-registry
   namespace: ${OSP18_NAMESPACE}
 data:
-  username: echo ${REDHAT_REGISTRY_USERNAME} | base64
-  password: echo ${REDHAT_REGISTRY_PASSWORD} | base64
+  username: $(echo "${REDHAT_REGISTRY_USERNAME}" | base64)
+  password: $(echo "${REDHAT_REGISTRY_PASSWORD}" | base64)
 EOF
 
     envsubst <yamls/openstackdataplanenodeset.yaml | oc apply -f - || {
@@ -103,11 +103,10 @@ download_nic_templates() {
 }
 
 get_ovn_info() {
-    oc -n openstack exec -c openstackclient openstackclient -- ssh compute-1.ctlplane sudo ovs-vsctl -f json --columns=external_ids list Open | jq -r '.data[0][0][1][]|join("=")'
-    # oc -n openstack rsh -c openstackclient openstackclient ssh compute-1.ctlplane sudo ovs-vsctl list Open . | sed -n -E 's/.*ovn-bridge-mappings="([^"]+).*/\1/p'
-    # oc -n openstack rsh -c openstackclient openstackclient ssh compute-1.ctlplane sudo ovs-vsctl list Open . | sed -n -E 's/.*ovn-bridge=([^,]+).*/\1/p'
-    # oc -n openstack rsh -c openstackclient openstackclient ssh compute-1.ctlplane sudo ovs-vsctl list Open . | sed -n -E 's/.*ovn-encap-type=([^,]+).*/\1/p'
-
+    oc -n openstack exec -c openstackclient openstackclient -- \
+      ssh compute-1.ctlplane sudo ovs-vsctl -f json --columns=external_ids list Open | \
+      jq -r        '.data[0][0][1][]|join("=")' | sed -n -E 's/^(ovn.*)+=(.*)+/edpm_\1: \2/p' |\
+      grep -v -e ovn-remote -e encap-tos -e openflow -e ofctrl
 }
 
 get_baremetal_nodes() {
@@ -117,9 +116,9 @@ get_baremetal_nodes() {
 get_node_info() {
     oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts'
     oc -n openstack get openstacknetconfigs.osp-director.openstack.org -ojson | jq -r '.items[0].spec | "Dns Servers : ", .dnsServers'
-    oc -n openstack get openstacknetconfigs.osp-director.openstack.org -ojson | jq -r '.items[0].spec | "Dns Search Domains : ",  .dnsSearchDomains'
     oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts.ipaddresses'
-    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq -r '.items[0].spec | "role_networks:", "-", (.networks)'
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | \
+      jq -r '.items[0].spec | "role_networks:", "  - \(.networks | to_entries[] | .value)"'
 }
 
 gen_nodes() {
@@ -128,8 +127,34 @@ gen_nodes() {
          "  \($k):", 
          "    hostName: \($k)", 
          "    ansible:",
-         "      ansibleHost: \($a["ctlplane"])",
-         "    networks:", ($a | to_entries[] | "    - name: \(.key) \n      fixedIP: \(.value)\n      subnetName: subnet1")'
+         "      ansibleHost: \($a["ctlplane"] | sub("/\\d+"; ""))",
+         "    networks:", ($a | to_entries[] | "    - name: \(.key) \n      fixedIP: \(.value | sub("/\\d+"; ""))\n      subnetName: subnet1")'
+}
+
+validation() {
+    oc apply -f - <<EOF
+apiVersion: dataplane.openstack.org/v1beta1
+kind: OpenStackDataPlaneService
+metadata:
+  name: pre-adoption-validation
+  namespace: ${OSP18_NAMESPACE}
+spec:
+  playbook: osp.edpm.pre_adoption_validation
+EOF
+
+oc apply -f - <<EOF
+apiVersion: dataplane.openstack.org/v1beta1
+kind: OpenStackDataPlaneDeployment
+metadata:
+  name: openstack-pre-adoption
+  namespace: ${OSP18_NAMESPACE}
+spec:
+  nodeSets:
+  - openstack
+  servicesOverride:
+  - pre-adoption-validation
+EOF
+
 }
 
 case $1 in
