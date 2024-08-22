@@ -140,6 +140,16 @@ metadata:
   namespace: ${OSP18_NAMESPACE}
 spec:
   playbook: osp.edpm.pre_adoption_validation
+  tlsCerts:
+    default: 
+      contents:
+        - dnsnames
+        - ips
+      networks:
+        - ctlplane
+      issuer: osp-rootca-issuer-internal
+  caCerts: combined-ca-bundle
+  edpmServiceType: nova
 EOF
 
 oc apply -f - <<EOF
