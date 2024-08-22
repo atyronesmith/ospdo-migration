@@ -104,26 +104,26 @@ download_nic_templates() {
 
 get_ovn_info() {
     oc -n openstack exec -c openstackclient openstackclient -- \
-      ssh compute-1.ctlplane sudo ovs-vsctl -f json --columns=external_ids list Open | \
-      jq -r        '.data[0][0][1][]|join("=")' | sed -n -E 's/^(ovn.*)+=(.*)+/edpm_\1: \2/p' |\
-      grep -v -e ovn-remote -e encap-tos -e openflow -e ofctrl
+        ssh compute-1.ctlplane sudo ovs-vsctl -f json --columns=external_ids list Open |
+        jq -r '.data[0][0][1][]|join("=")' | sed -n -E 's/^(ovn.*)+=(.*)+/edpm_\1: \2/p' |
+        grep -v -e ovn-remote -e encap-tos -e openflow -e ofctrl
 }
 
 get_baremetal_nodes() {
-    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts'
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org -ojson | jq '.items[0].status.baremetalHosts'
 }
 
 get_node_info() {
-    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts'
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org -ojson | jq '.items[0].status.baremetalHosts'
     oc -n openstack get openstacknetconfigs.osp-director.openstack.org -ojson | jq -r '.items[0].spec | "Dns Servers : ", .dnsServers'
-    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | jq '.items[0].status.baremetalHosts.ipaddresses'
-    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | \
-      jq -r '.items[0].spec | "role_networks:", "  - \(.networks | to_entries[] | .value)"'
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org -ojson | jq '.items[0].status.baremetalHosts.ipaddresses'
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org -ojson |
+        jq -r '.items[0].spec | "role_networks:", "  - \(.networks | to_entries[] | .value)"'
 }
 
 gen_nodes() {
-    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org  -ojson | \
-       jq -r '.items[0].status.baremetalHosts| "nodes:", keys[] as $k | .[$k].ipaddresses as $a | 
+    oc -n openstack get openstackbaremetalsets.osp-director.openstack.org -ojson |
+        jq -r '.items[0].status.baremetalHosts| "nodes:", keys[] as $k | .[$k].ipaddresses as $a | 
          "  \($k):", 
          "    hostName: \($k)", 
          "    ansible:",
@@ -152,7 +152,7 @@ spec:
   edpmServiceType: nova
 EOF
 
-oc apply -f - <<EOF
+    oc apply -f - <<EOF
 apiVersion: dataplane.openstack.org/v1beta1
 kind: OpenStackDataPlaneDeployment
 metadata:
@@ -165,6 +165,45 @@ spec:
   - pre-adoption-validation
 EOF
 
+    watch oc get pod -l app=openstackansibleee
+
+}
+
+adoption_cleanup() {
+    oc apply -f - <<EOF
+apiVersion: dataplane.openstack.org/v1beta1
+kind: OpenStackDataPlaneService
+metadata:
+  name: tripleo-cleanup
+spec:
+  playbook: osp.edpm.tripleo_cleanup
+EOF
+
+    oc apply -f - <<EOF
+apiVersion: dataplane.openstack.org/v1beta1
+kind: OpenStackDataPlaneDeployment
+metadata:
+  namespace: ${OSP18_NAMESPACE}
+  name: tripleo-cleanup
+spec:
+  nodeSets:
+  - openstack
+  servicesOverride:
+  - tripleo-cleanup
+EOF
+}
+
+adopt_dataplane() {
+    oc apply -f - <<EOF
+apiVersion: dataplane.openstack.org/v1beta1
+kind: OpenStackDataPlaneDeployment
+metadata:
+  name: openstack
+  namespace: ${OSP18_NAMESPACE}
+spec:
+  nodeSets:
+  - openstack
+EOF
 }
 
 case $1 in
