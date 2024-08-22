@@ -5,10 +5,10 @@ metadata:
   namespace: ${OSP18_NAMESPACE}
 spec:
   networks:
-    - name: ctlplane-osp18
-      dnsDomain: ctlplane-osp18.osptest.test.metalkube.org
+    - name: ctlplane
+      dnsDomain: ctlplane.osptest.test.metalkube.org
       subnets:
-        - name: ctlplane-osp18
+        - name: ctlplane
           allocationRanges:
           - end: 172.22.0.149
             start: 172.22.0.100
@@ -16,20 +16,20 @@ spec:
           gateway: 172.22.0.1
           routes: []
           vlan: 0
-    - name: internalapi-osp18
-      dnsDomain: internalapi-osp18.osptest.test.metalkube.org
+    - name: internalapi
+      dnsDomain: internalapiosptest.test.metalkube.org
       subnets:
-        - name: internalapi-osp18
+        - name: internalapi
           allocationRanges:
           - end: 172.17.0.149
             start: 172.17.0.100
           cidr: 172.17.0.0/24
           routes: []
           vlan: 20
-    - name: external-osp18
+    - name: external
       dnsDomain: external-osp18.osptest.test.metalkube.org
       subnets:
-        - name: external-osp18
+        - name: external
           allocationRanges:
             - end: 10.0.0.149
               start: 10.0.0.100
@@ -37,30 +37,30 @@ spec:
           gateway: 10.0.0.1
           routes: []          
           vlan: 0
-    - name: storage-osp18
-      dnsDomain: storage-osp18.osptest.test.metalkube.org
+    - name: storage
+      dnsDomain: storage.osptest.test.metalkube.org
       subnets:
-        - name: storage-osp18
+        - name: storage
           allocationRanges:
           - end: 172.18.0.149
             start: 172.18.0.100
           cidr: 172.18.0.0/24
           routes: []
           vlan: 30
-    - name: storagemgmt-osp18
-      dnsDomain: storagemgmt-osp18.osptest.test.metalkube.org
+    - name: storagemgmt
+      dnsDomain: storagemgmt.osptest.test.metalkube.org
       subnets:
-        - name: storagemgmt-osp18
+        - name: storagemgmt
           allocationRanges:
           - end: 172.19.0.149
             start: 172.19.0.100
           cidr: 172.19.0.0/24
           routes: []
           vlan: 40
-    - name: tenant-osp18
-      dnsDomain: tenant-osp18.osptest.test.metalkube.org
+    - name: tenant
+      dnsDomain: tenant.osptest.test.metalkube.org
       subnets:
-        - name: tenant-osp18
+        - name: tenant
           allocationRanges:
           - end: 172.20.0.149
             start: 172.20.0.100
