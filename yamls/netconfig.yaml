@@ -17,7 +17,7 @@ spec:
           routes: []
           vlan: 0
     - name: internalapi
-      dnsDomain: internalapiosptest.test.metalkube.org
+      dnsDomain: internalapi.osptest.test.metalkube.org
       subnets:
         - name: internalapi
           allocationRanges:
@@ -27,7 +27,7 @@ spec:
           routes: []
           vlan: 20
     - name: external
-      dnsDomain: external-osp18.osptest.test.metalkube.org
+      dnsDomain: external.osptest.test.metalkube.org
       subnets:
         - name: external
           allocationRanges:
