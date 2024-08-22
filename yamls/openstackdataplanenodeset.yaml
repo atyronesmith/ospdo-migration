@@ -27,9 +27,11 @@ spec:
       value: "True"
   nodes:
     compute-0:
-      hostName: compute-0
+      # Use a FQDN here to avoid issues with value specified in netconfig.yaml
+      hostName: compute-0.osptest.test.metalkube.org
       ansible:
         ansibleHost: 172.22.0.170
+        ansibleUser: cloud-admin
       networks:
       - name: ctlplane
         fixedIP: 172.22.0.170
@@ -44,9 +46,11 @@ spec:
         fixedIP: 172.20.0.170
         subnetName: tenant
     compute-1:
-      hostName: compute-1
+      # Use a FQDN here to avoid issues with value specified in netconfig.yaml
+      hostName: compute-1.osptest.test.metalkube.org
       ansible:
         ansibleHost: 172.22.0.180
+        ansibleUser: cloud-admin
       networks:
       - name: ctlplane
         fixedIP: 172.22.0.180
@@ -63,7 +67,7 @@ spec:
   nodeTemplate:
     ansibleSSHPrivateKeySecret: dataplane-adoption-secret
     ansible:
-      ansibleUser: root
+      ansibleUser: cloud-admin
       ansibleVarsFrom:
         - prefix: subscription_manager_
           secretRef:
@@ -72,6 +76,7 @@ spec:
           secretRef:
             name: redhat-registry
       ansibleVars:
+        edpm_tuned_profile: virtual-host
         edpm_bootstrap_release_version_package: []
         service_net_map:
           nova_api_network: internalapi
