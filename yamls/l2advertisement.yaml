@@ -8,7 +8,7 @@ spec:
   ipAddressPools:
   - ctlplane-osp18
   interfaces:
-  - enp1s0
+  - br-ctlplane
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
