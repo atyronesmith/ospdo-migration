@@ -5,7 +5,7 @@ metadata:
 spec:
   tlsEnabled: true
   networkAttachments:
-    - ctlplane-osp18
+    - ctlplane
   preProvisioned: true
   services:
     - bootstrap
@@ -31,35 +31,35 @@ spec:
       ansible:
         ansibleHost: 172.22.0.170
       networks:
-      - name: ctlplane-osp18
+      - name: ctlplane
         fixedIP: 172.22.0.170
-        subnetName: ctlplane-osp18
-      - name: internalapi-osp18
+        subnetName: ctlplane
+      - name: internalapi
         fixedIP: 172.17.0.170
-        subnetName: internalapi-osp18
-      - name: storage-osp18
+        subnetName: internalapi
+      - name: storage
         fixedIP: 172.18.0.170
-        subnetName: storage-osp18
-      - name: tenant-osp18
+        subnetName: storage
+      - name: tenant
         fixedIP: 172.20.0.170
-        subnetName: tenant-osp18
+        subnetName: tenant
     compute-1:
       hostName: compute-1
       ansible:
         ansibleHost: 172.22.0.180
       networks:
-      - name: ctlplane-osp18
+      - name: ctlplane
         fixedIP: 172.22.0.180
-        subnetName: ctlplane-osp18
-      - name: internalapi-osp18
+        subnetName: ctlplane
+      - name: internalapi
         fixedIP: 172.17.0.180
-        subnetName: internalapi-osp18
-      - name: storage-osp18
+        subnetName: internalapi
+      - name: storage
         fixedIP: 172.18.0.180
-        subnetName: storage-osp18
-      - name: tenant-osp18
+        subnetName: storage
+      - name: tenant
         fixedIP: 172.20.0.180
-        subnetName: tenant-osp18 
+        subnetName: tenant 
   nodeTemplate:
     ansibleSSHPrivateKeySecret: dataplane-adoption-secret
     ansible:
@@ -74,8 +74,8 @@ spec:
       ansibleVars:
         edpm_bootstrap_release_version_package: []
         service_net_map:
-          nova_api_network: internalapi-osp18
-          nova_libvirt_network: internalapi-osp18
+          nova_api_network: internalapi
+          nova_libvirt_network: internalapi
 
         # edpm_network_config
         # Default nic config template for a EDPM compute node
