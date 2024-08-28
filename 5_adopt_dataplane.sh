@@ -78,8 +78,8 @@ metadata:
   name: subscription-manager
   namespace: ${OSP18_NAMESPACE}
 data:
-  username: $(echo "${SUBSCRIPTION_MANAGER_USERNAME}" | base64)
-  password: $(echo "${SUBSCRIPTION_MANAGER_PASSWORD}" | base64)
+  username: $(echo -n "${SUBSCRIPTION_MANAGER_USERNAME}" | base64)
+  password: $(echo -n "${SUBSCRIPTION_MANAGER_PASSWORD}" | base64)
 ---
 apiVersion: v1
 kind: Secret
@@ -87,8 +87,22 @@ metadata:
   name: redhat-registry
   namespace: ${OSP18_NAMESPACE}
 data:
-  username: $(echo "${REDHAT_REGISTRY_USERNAME}" | base64)
-  password: $(echo "${REDHAT_REGISTRY_PASSWORD}" | base64)
+  username: $(echo -n "${REDHAT_REGISTRY_USERNAME}" | base64)
+  password: $(echo -n "${REDHAT_REGISTRY_PASSWORD}" | base64)
+EOF
+
+# missing from documentation
+    LIBVIRT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' LibvirtTLSPassword:' | awk -F ': ' '{ print $2; }')
+
+    oc apply -f - <<EOF
+apiVersion: v1
+data:
+ LibvirtPassword: $(echo -n "${LIBVIRT_PASSWORD}" | base64)
+kind: Secret
+metadata:
+ name: libvirt-secret
+ namespace: ${OSP18_NAMESPACE}
+type: Opaque
 EOF
 
     envsubst <yamls/openstackdataplanenodeset.yaml | oc apply -f - || {
@@ -204,7 +218,15 @@ spec:
   nodeSets:
   - openstack
 EOF
+
+# watch oc get pod -l app=openstackansibleee
+# oc logs -l app=openstackansibleee -f --max-log-requests 20
 }
+
+verify_networking_services() {
+  oc exec openstackclient -- openstack network agent list
+}
+
 
 case $1 in
 5.1)
@@ -221,6 +243,12 @@ nodeinfo)
     ;;
 gennodes)
     gen_nodes
+    ;;
+nics)
+    download_nic_templates
+    ;;
+adopt)
+    adopt_dataplane
     ;;
 *)
     echo "Invalid argument"
