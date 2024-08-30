@@ -1,0 +1,224 @@
+default_timeout: 360
+
+# ocp_version: 4.7
+# ocp_minor_version: 24
+# sriov_version: 4.7
+# ocp_release_image: quay.io/openshift-release-dev/ocp-release:4.7.33-x86_64
+# ocp_ai_discovery_iso: https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.7/latest/rhcos-live.x86_64.iso
+
+# ocp_version: 4.7
+# ocp_minor_version: 53
+# sriov_version: 4.7
+# cnv_hyperconverged_operator_version: 2.6.2
+# ocp_release_image: quay.io/openshift-release-dev/ocp-release:4.8.14-x86_64
+# ocp_ai_discovery_iso: https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.8/latest/rhcos-live.x86_64.iso
+
+# ocp_version: 4.9
+# ocp_minor_version: 16
+# sriov_version: 4.9
+# cnv_hyperconverged_operator_version: 4.8.2
+# ocp_release_image: quay.io/openshift-release-dev/ocp-release:4.9.0-x86_64
+# ocp_ai_discovery_iso: https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.9/4.9.0/rhcos-4.9.0-x86_64-live.x86_64.iso
+
+# ocp_version: "4.11"
+# ocp_minor_version: "9"
+# sriov_version: "4.11"
+# ocp_version: "4.13"
+# ocp_minor_version: "13"
+#sriov_version: "4.13"
+#ocp_version: "4.14"
+#ocp_minor_version: "19"
+ocp_version: "4.16"
+ocp_minor_version: "3"
+# sriov_version: "stable"
+#ocp_ai_discovery_iso: https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.9/4.9.0/rhcos-4.9.0-x86_64-live.x86_64.iso
+# ocp_ai_ansible_repo: https://github.com/redhat-partner-solutions/crucible.git
+# ocp_ai_ansible_branch: main
+
+ci_token: sha256~ZPO-2G9aS8DBIOQ99RydUVO6i2s2t6rbe_ipfV6oxXw
+ocp_ai: true
+enable_virt_sriov: false
+enable_fencing: true
+enable_freeipa: true
+freeipa_image_url: quay.io/freeipa/freeipa-server:centos-8-stream-4.9.13
+#enable_ocs: true
+#osp_interface: enp7s0
+# director_operator_image: quay.io/andrewbays/osp-director-operator
+# csv_version: 0.0.1-17.0
+
+ocp_disconnected_install: false
+
+ocp_network_type: OVNKubernetes
+
+osp_ctlplane_node_selector:
+  kubernetes.io/hostname: ostest-master-0
+
+# ocp_master_disk: 120
+# ocp_worker_disk: 120
+
+ocp_num_masters: 3
+ocp_num_workers: 0
+ocp_num_extra_workers: 3
+ocp_master_memory: 60000
+ocp_master_vcpu: 12
+ocp_master_disk: 150
+ocp_worker_disk: 100
+
+nfs_pvs:
+  - size: 10
+    number: 16
+  - size: 128
+    number: 8
+  - size: 128
+    number: 12
+    shared: true
+
+osp_release_defaults:
+  tlse: true
+  base_image_url: https://download.devel.redhat.com/rhel-9/rel-eng/RHEL-9/latest-RHEL-9.2.0/compose/BaseOS/x86_64/images/rhel-guest-image-9.2-20230414.17.x86_64.qcow2
+  attach_configs:
+    br-ctlplane:
+      interfaces:
+      - type: bridge
+        name: br-ctlplane
+        interface: enp1s0
+        dhcp: true
+        mtu: 1500
+    br-osp:
+      interfaces:
+      - type: bridge
+        name: br-osp
+        interface: enp7s0
+        mtu: 9000
+      - type: ethernet
+        interface: enp7s0
+        mtu: 9000
+    br-ex:
+      interfaces:
+      - type: bridge
+        name: br-external
+        interface: enp6s0
+        mtu: 1500
+          #- type: ethernet
+          #interface: enp6s0
+          #mtu: 1500
+
+
+osp_networks:
+  ctlplane:
+    name: Control
+    name_lower: ctlplane
+    is_control_plane: true
+    subnets:
+    - name: ctlplane
+      ipv4:
+        cidr: 172.22.0.0/24
+        gateway: 172.22.0.1
+        allocation:
+          start: 172.22.0.150
+          end: 172.22.0.254
+      attach_config: br-ctlplane
+  internalapi:
+    name: InternalApi
+    name_lower: internal_api
+    subnets:
+    - name: internal_api
+      vlan: 20
+      ipv4:
+        cidr: 172.17.0.0/24
+        allocation:
+          start: 172.17.0.150
+          end: 172.17.0.250
+      attach_config: br-osp
+  external:
+    name: External
+    name_lower: external
+    subnets:
+    - name: external
+      ipv4:
+        cidr: 10.0.0.0/24
+        gateway: 10.0.0.1
+        allocation:
+          start: 10.0.0.150
+          end: 10.0.0.250
+      attach_config: br-ex
+  storage:
+    name: Storage
+    name_lower: storage
+    mtu: 9000
+    subnets:
+    - name: storage
+      vlan: 30
+      ipv4:
+        cidr: 172.18.0.0/24
+        allocation:
+          start: 172.18.0.150
+          end: 172.18.0.250
+      attach_config: br-osp
+  storagemgmt:
+    name: StorageMgmt
+    name_lower: storage_mgmt
+    subnets:
+    - name: storage_mgmt
+      vlan: 40
+      ipv4:
+        cidr: 172.19.0.0/24
+        allocation:
+          start: 172.19.0.150
+          end: 172.19.0.250
+      attach_config: br-osp
+  tenant:
+    name: Tenant
+    name_lower: tenant
+    vip: false
+    mtu: 9000
+    subnets:
+    - name: tenant
+      vlan: 50
+      vip: false
+      ipv4:
+        cidr: 172.20.0.0/24
+        allocation:
+          start: 172.20.0.150
+          end: 172.20.0.250
+      attach_config: br-osp
+osp_reservations:
+  openstackclient-0:
+    ip_reservations:
+      ctlplane: 172.22.0.251
+      external: 10.0.0.251
+      internal_api: 172.17.0.251
+  controlplane:
+    ip_reservations:
+      ctlplane: 172.22.0.150
+      external: 10.0.0.150
+      internal_api: 172.17.0.150
+      storage: 172.18.0.150
+      storage_mgmt: 172.19.0.150
+  controller-0:
+    ip_reservations:
+      ctlplane: 172.22.0.160
+      external: 10.0.0.160
+      internal_api: 172.17.0.160
+      storage: 172.18.0.160
+      storage_mgmt: 172.19.0.160
+      tenant: 172.20.0.160
+    mac_reservations:
+      datacentre: fa:16:3a:aa:aa:aa
+      datacentre2: fa:16:3b:aa:aa:aa
+  compute-0:
+    ip_reservations:
+      ctlplane: 172.22.0.170
+      internal_api: 172.17.0.170
+      storage: 172.18.0.170
+      tenant: 172.20.0.170
+    macReservations:
+      datacentre: fa:16:3a:bb:bb:bb
+  compute-1:
+    ip_reservations:
+      ctlplane: 172.22.0.180
+      internal_api: 172.17.0.180
+      storage: 172.18.0.180
+      tenant: 172.20.0.180
+    macReservations:
+      datacentre: fa:16:3a:cc:cc:cc
