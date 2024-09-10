@@ -11,8 +11,14 @@ export OSPDO_NAMESPACE
 
 # shellcheck disable=SC2034
 #OS_CLIENT="oc rsh -n $OSPDO_NAMESPACE -c openstackclient openstackclient "
-OS_CLIENT="oc exec -t openstackclient -- "
+OS_CLIENT="oc exec -t openstackclient -c openstackclient -- "
 export OS_CLIENT
+
+MARIADB_BACKUP_DIR="./mariadb-backup"
+export MARIADB_BACKUP_DIR
+
+EXPORTED_CLOUD_VARIABLES="cloud_exported_variables.sh"
+export EXPORTED_CLOUD_VARIABLES
 
 # oc project "$OSP18_NAMESPACE" >/dev/null 2>&1 || {
 #     oc create namespace "$OSP18_NAMESPACE" || {

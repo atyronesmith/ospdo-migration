@@ -2,4 +2,9 @@ tls-certs.yaml
 tripleo-passwords.yaml
 *.conf
 obj
+cloud_exported_variables.sh
+mariadb-backup
+extract
+
+
 

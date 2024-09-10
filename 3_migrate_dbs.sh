@@ -1,5 +1,6 @@
 #!/bin/bash
-# shellcheck source=common.sh
+
+# shellcheck source-path=SCRIPTDIR
 . common.sh
 . common-ospdo.sh
 
@@ -7,13 +8,20 @@ usage() {
     echo "Usage: $0 [-h] [-d] <command> <args>"
     echo "  -h  Display this help message"
     echo "  -d  Enable debug mode"
-    echo " "
-    echo "  retrieve-topology | 3_1 : Retrieve the OSPdO topology"
-    echo "  deploy-backend-services | 3_2 : Deploy the backend services"
-    echo "  stop-osp-services | 3_5 : Stop the OSP services"
-    echo "  create-mariadb-copy-data | cmcd <namespace> <network> <target_node> : Create MariaDB data"
-    echo "  delete-mariadb-copy-data | dmcd <namespace> : Delete MariaDB data"
-    echo "  migrate-mariadb | 3_6 : Migrate MariaDB"
+    echo "Commands:"
+    echo "  retrieve-ospdo-db-info | 1 : Retrieve the OSPdO database information"
+    echo "  stop-ospdo-services | 2 : Stop the OSPdO services"
+    echo "  delete-mariadb-data : Delete the MariaDB data"
+    echo "  create-mariadb-data : Create the MariaDB data"
+    echo "  extract-mariadb : Extract the MariaDB data"
+    echo "  create-ovn-copy-data : Create the OVN copy data"
+    echo "  extract-ovn-dbs : Extract the OVN DBs"
+    echo "  deploy-backend-services : Deploy the backend services"
+    echo "  start-ovn-dbs : Start the OVN DBs"
+    echo "  update-ovn-db-schemas-7-9 : Update the OVN DB schemas 7-9"
+    echo "  update-ovn-db-schemas-10-11 : Update the OVN DB schemas 10-11"
+    echo "  update-ovn-db-schemas-12-13 : Update the OVN DB schemas 12-13"
+    echo "  update-ovn-db-schemas-14-15 : Update the OVN DB schemas 14-15"
 }
 
 OVSDB_IMAGE=registry.redhat.io/rhosp-dev-preview/openstack-ovn-base-rhel9:18.0
@@ -28,7 +36,9 @@ SOURCE_DB_ROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -
 }
 export SOURCE_DB_ROOT_PASSWORD
 
-SOURCE_MARIADB_IP=172.17.0.160
+# In OSPdO, the mysql service iP can be found in the tripleo-exports-default ConfigMap, section ctlplane-export.yaml
+cpexport=$(oc get cm tripleo-exports-default -o json | jq -r '.data["ctlplane-export.yaml"]')
+SOURCE_MARIADB_IP=$(echo "$cpexport" | sed -e '0,/ MysqlInternal/d' | sed -n '0,/host_nobrackets/s/^.*host_nobrackets\:\s*\(.*\)$/\1/p')
 export SOURCE_MARIADB_IP
 
 MARIADB_IMAGE=registry.redhat.io/rhosp-dev-preview/openstack-mariadb-rhel9:18.0
@@ -38,13 +48,17 @@ MARIADB_CLIENT_ANNOTATIONS='--annotations=k8s.v1.cni.cncf.io/networks='"$OSPDO_I
 export MARIADB_CLIENT_ANNOTATIONS
 
 #RUN_OVERRIDES='{"apiVersion":"a1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"}}, "spec":{"nodeName": "ostest-master-0"}}'
-RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-osp18\",\"namespace\": \"'"$OSP18_NAMESPACE"'\"}]"}}, "spec":{"nodeSelector": {"type" : "openstack"}}}'
+#RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-osp18\",\"namespace\": \"'"$OSP18_NAMESPACE"'\"}]"}}, "spec":{"nodeSelector": {"type" : "openstack"}}}'
+RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"}}}'
 
-retrieve_topology_3_1() {
+retrieve_ospdo_db_info() {
+    echo "OSPdO MariaDB IP: $SOURCE_MARIADB_IP"
+    echo "OSPdO MariaDB Root Password: $SOURCE_DB_ROOT_PASSWORD"
+
     # Get the list of databases from the source MariaDB
     echo "Show OSPdO databases"
     PULL_OPENSTACK_CONFIGURATION_DATABASES="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
-        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" -e 'SHOW databases;')"
+        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" -e 'SHOW databases;')"
     export PULL_OPENSTACK_CONFIGURATION_DATABASES
     echo "$PULL_OPENSTACK_CONFIGURATION_DATABASES"
 
@@ -53,14 +67,14 @@ retrieve_topology_3_1() {
     # Run mysqlcheck on the original database to look for inaccuracies
     echo "Running mysqlcheck on the source MariaDB"
     PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
-        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysqlcheck --all-databases -h "$SOURCE_MARIADB_IP" -u root -p"$SOURCE_DB_ROOT_PASSWORD" | grep -v OK)"
+        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysqlcheck --all-databases -h "$SOURCE_MARIADB_IP" -u root -p"$SOURCE_DB_ROOT_PASSWORD" | grep -v OK)"
     export PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK
     echo "$PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK"
 
     # Get the Compute service (nova) cells mappings from the database:
     echo "Get the Compute service (nova) cells mappings from the database"
     PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
-        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "${SOURCE_MARIADB_IP}" -uroot -p"${SOURCE_DB_ROOT_PASSWORD}" nova_api -e \
+        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "${SOURCE_MARIADB_IP}" -uroot -p"${SOURCE_DB_ROOT_PASSWORD}" nova_api -e \
         'select uuid,name,transport_url,database_connection,disabled from cell_mappings;')"
     export PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS
     echo "$PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS"
@@ -68,7 +82,7 @@ retrieve_topology_3_1() {
     # Get the hostnames of the nova-compute services from the database
     echo "Get the hostnames of the nova-compute services from the database"
     PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
-        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" nova_api -e \
+        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" nova_api -e \
         "select host from nova.services where services.binary='nova-compute';")"
     export PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES
     echo "$PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES"
@@ -81,13 +95,13 @@ retrieve_topology_3_1() {
 
     # Get the SR-IOV agents from the database
     echo "Get the SR-IOV agents from the database"
-    SRIOV_AGENTS=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" -it --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" \
+    SRIOV_AGENTS=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" -it --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" \
         -uroot -p"$SOURCE_DB_ROOT_PASSWORD" ovs_neutron -e "select host, configurations from agents where agents.binary='neutron-sriov-nic-agent';")
     export SRIOV_AGENTS
     echo "$SRIOV_AGENTS"
-    
+
     # Store exported variables for future use
-    cat >~/.source_cloud_exported_variables <<EOF
+    cat >~/."$EXPORTED_CLOUD_VARIABLES" <<EOF
 PULL_OPENSTACK_CONFIGURATION_DATABASES="$PULL_OPENSTACK_CONFIGURATION_DATABASES"
 PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK="$PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK"
 PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS="$PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS"
@@ -95,101 +109,20 @@ PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES="$PULL_OPENSTACK_CONFIGURATI
 PULL_OPENSTACK_CONFIGURATION_NOVAMANAGE_CELL_MAPPINGS="$PULL_OPENSTACK_CONFIGURATION_NOVAMANAGE_CELL_MAPPINGS"
 SRIOV_AGENTS="$SRIOV_AGENTS"
 EOF
-    chmod 0600 ~/.source_cloud_exported_variables
+    chmod 0600 ~/."$EXPORTED_CLOUD_VARIABLES"
 
     #TODO
     # Optional: If there are neutron-sriov-nic-agent agents running in the deployment, get its configuration:
-
 }
 
-deploy_backend_services_3_2() {
-
-    envsubst <yamls/osp-secret.yaml | oc apply -f - || {
-        echo "Failed to create osp-secret"
-        exit 1
-    }
-
-    ADMIN_PASSWORD=$(grep <"${PASSWORD_FILE}" ' AdminPassword:' | awk -F ': ' '{ print $2; }')
-
-    AODH_PASSWORD=$(grep <"${PASSWORD_FILE}" ' AodhPassword:' | awk -F ': ' '{ print $2; }')
-    BARBICAN_PASSWORD=$(grep <"${PASSWORD_FILE}" ' BarbicanPassword:' | awk -F ': ' '{ print $2; }')
-    BARBICANKEK_PASSWORD=$(grep <"${PASSWORD_FILE}" ' BarbicanSimpleCryptoKek:' | awk -F ': ' '{ print $2; }')
-    CEILOMETER_METERING_SECRET=$(grep <"${PASSWORD_FILE}" ' CeilometerMeteringSecret:' | awk -F ': ' '{ print $2; }')
-    CEILOMETER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CeilometerPassword:' | awk -F ': ' '{ print $2; }')
-    CINDER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CinderPassword:' | awk -F ': ' '{ print $2; }')
-    CONGRESS_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CongressPassword:' | awk -F ': ' '{ print $2; }')
-    DESIGNATE_PASSWORD=$(grep <"${PASSWORD_FILE}" ' DesignatePassword:' | awk -F ': ' '{ print $2; }')
-    GLANCE_PASSWORD=$(grep <"${PASSWORD_FILE}" ' GlancePassword:' | awk -F ': ' '{ print $2; }')
-    HEAT_AUTH_ENCRYPTION_KEY=$(grep <"${PASSWORD_FILE}" ' HeatAuthEncryptionKey:' | awk -F ': ' '{ print $2; }')
-    HEAT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' HeatPassword:' | awk -F ': ' '{ print $2; }')
-    IRONIC_PASSWORD=$(grep <"${PASSWORD_FILE}" ' IronicPassword:' | awk -F ': ' '{ print $2; }')
-    MANILA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' ManilaPassword:' | awk -F ': ' '{ print $2; }')
-    NEUTRON_PASSWORD=$(grep <"${PASSWORD_FILE}" ' NeutronPassword:' | awk -F ': ' '{ print $2; }')
-    NOVA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' NovaPassword:' | awk -F ': ' '{ print $2; }')
-    OCTAVIA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' OctaviaPassword:' | awk -F ': ' '{ print $2; }')
-    PLACEMENT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' PlacementPassword:' | awk -F ': ' '{ print $2; }')
-    MYSQLROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -F ': ' '{ print $2; }')
-    SWIFT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' SwiftPassword:' | awk -F ': ' '{ print $2; }') 
-
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "AdminPassword=$ADMIN_PASSWORD"
-
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "AodhPassword=$AODH_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "BarbicanPassword=$BARBICAN_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "BarbicanSimpleCryptoKEK=$BARBICANKEK_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "CeilometerMeteringSecret=$CEILOMETER_METERING_SECRET"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "CeilometerPassword=$CEILOMETER_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "CinderPassword=$CINDER_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "CongressPassword=$CONGRESS_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "DesignatePassword=$DESIGNATE_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "DbRootPassword=$MYSQLROOT_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "GlancePassword=$GLANCE_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "HeatAuthEncryptionKey=$HEAT_AUTH_ENCRYPTION_KEY"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "HeatPassword=$HEAT_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "IronicPassword=$IRONIC_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "IronicInspectorPassword=$IRONIC_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "ManilaPassword=$MANILA_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "NeutronPassword=$NEUTRON_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "NovaPassword=$NOVA_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "OctaviaPassword=$OCTAVIA_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "PlacementPassword=$PLACEMENT_PASSWORD"
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "SwiftPassword=$SWIFT_PASSWORD"
-
-    oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "MetadataSecret=12345678"
-
-    envsubst <yamls/openstackcontrolplane.yaml | oc apply -f - || {
-        echo "Failed to apply openstackcontrolplane"
-        exit 1
-    }
-
-    # Cannot check for openstackcontrolplane to be ready as it will not be ready until 
-    # openstackclient is deployed.  openstackclient cannot be deployed until Keystone is
-    # available.
-    # echo "Wait for openstackcontrolplane to be Ready"
-    # oc wait openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --for condition=Ready --timeout=600s || {
-    #     echo "Failed to wait for openstackcontrolplane to be Ready"
-    #     exit 1
-    # }
-
-    echo "Wait for galera-0..."
-    oc wait pod openstack-galera-0 -n ${OSP18_NAMESPACE} --for=jsonpath='{.status.phase}'=Running --timeout=30s || {
-        echo "ERROR: Galera pod did not start"
-        exit 1
-    }
-
-    echo "Wait for cell1-galera-0 to be Ready"
-    oc wait pod openstack-cell1-galera-0 -n ${OSP18_NAMESPACE} --for=jsonpath='{.status.phase}'=Running --timeout=30s || {
-        echo "ERROR: Galera cell1 pod did not start"
-        exit 1
-    }
-}
-
-stop_osp_services_3_5() {
+stop_ospdo_services() {
     ./ospdo_services.sh check-openstack
     ./ospdo_services.sh stop-systemd
     ./ospdo_services.sh check-systemd
     ./ospdo_services.sh stop-pcm
     ./ospdo_services.sh check-pcm
 }
+
 # Function to delete MariaDB data
 # This function checks if the pod 'mariadb-copy-data' and the persistent volume claim 'mariadb-data' exist,
 # and deletes them if they do.
@@ -214,7 +147,6 @@ delete_mariadb_data() {
 create_mariadb_data() {
     local ns=$1
     local network=$2
-    local target_node=$3
 
     echo "Check for mariadb-data pvc"
     oc get pvc mariadb-data -n "${ns}" >/dev/null 2>&1 || {
@@ -233,12 +165,11 @@ create_mariadb_data() {
     oc get pod mariadb-copy-data -n "${ns}" >/dev/null 2>&1 || {
         export NAMESPACE="$ns"
         export NETWORK="$network"
-        export TARGET_NODE="$target_node"
         export IMAGE=${MARIADB_IMAGE}
         echo "Creating mariadb-copy-data pod"
         # TODO need to automate the allocation of an IP address for mariadb-copy-data pod
         # shellcheck disable=SC2016
-        envsubst '$NAMESPACE,$NETWORK,$TARGET_NODE,$IMAGE' <yamls/mariadb-copy-data-pod.yaml | oc apply -f - || {
+        envsubst '$NAMESPACE,$NETWORK,$IMAGE' <yamls/mariadb-copy-data-pod.yaml | oc apply -f - || {
             echo "ERROR: Failed to create mariadb-copy-data pod"
             exit 1
         }
@@ -250,33 +181,47 @@ create_mariadb_data() {
 
 }
 
-migrate_mariadb_3_6() {
-    PODIFIED_MARIADB_IP=$(oc get svc --selector "mariadb/name=openstack" -ojsonpath='{.items[0].spec.clusterIP}' -n ${OSP18_NAMESPACE})
-    PODIFIED_CELL1_MARIADB_IP=$(oc get svc --selector "mariadb/name=openstack-cell1" -ojsonpath='{.items[0].spec.clusterIP}' -n ${OSP18_NAMESPACE})
-    PODIFIED_DB_ROOT_PASSWORD=$(oc get -o json secret/osp-secret -n "${OSP18_NAMESPACE}" | jq -r .data.DbRootPassword | base64 -d)
-
+extract_mariadb() {
     # The CHARACTER_SET and collation should match the source DB
     # if the do not then it will break foreign key relationships
     # for any tables that are created in the future as part of db sync
     CHARACTER_SET=utf8
     COLLATION=utf8_general_ci
 
-    declare -A SOURCE_GALERA_MEMBERS
-
-    create_mariadb_data "${OSPDO_NAMESPACE}" "${OSPDO_INTERNAL_API_NET}" "${CONTROLLER_NODE}" || {
+    create_mariadb_data "${OSPDO_NAMESPACE}" "${OSPDO_INTERNAL_API_NET}" || {
         echo "Failed to create mariadb-copy-data pod"
         exit 1
     }
+    unset SG
+    unset SNN
+    # echo "$cpexport" | sed -n '/pacemaker_node_ips/{N;N;N;p}'
+    #   pacemaker_node_ips:
+    #     - 172.17.0.160
+    #     - 172.17.0.152
+    #     - 172.17.0.154
+    mapfile -t SG < <(echo "$cpexport" | sed -n '/pacemaker_node_ips/{n;N;N;s/[ -]//g;p}')
+    # echo "${SG[@]}"
+    # 172.17.0.160 172.17.0.152 172.17.0.154
+
+    # pacemaker_short_node_names:
+    #     - controller-0
+    #     - controller-1
+    #     - controller-2
+    mapfile -t SNN < <(echo "$cpexport" | sed -n -E '/pacemaker_short_node_names/{n;N;N;s/[ ]+-[ ]+//g;p}')
+
+    unset SOURCE_GALERA_MEMBERS
+    declare -A SOURCE_GALERA_MEMBERS
 
     # oc get osnetconfig -o jsonpath='{.items[0].spec.reservations}'
     SOURCE_GALERA_MEMBERS=(
-        ["controller-0"]=172.17.0.160
-        # ...
+        ["${SNN[0]}"]=${SG[0]}
+        ["${SNN[1]}"]=${SG[1]}
+        ["${SNN[2]}"]=${SG[2]}
     )
 
     for i in "${!SOURCE_GALERA_MEMBERS[@]}"; do
         echo "Checking for the database node $i WSREP status Synced"
-        oc rsh -n "${OSPDO_NAMESPACE}" mariadb-copy-data mysql \
+        echo oc rsh -n "${OSPDO_NAMESPACE}" mariadb-copy-data -- mysql \
             -h "${SOURCE_GALERA_MEMBERS[$i]}" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" \
             -e "show global status like 'wsrep_local_state_comment'" |
             grep -qE "\bSynced\b"
@@ -284,17 +229,16 @@ migrate_mariadb_3_6() {
 
     echo "Show OSPdO databases"
     oc rsh -n "${OSPDO_NAMESPACE}" mariadb-copy-data mysql -h "${SOURCE_MARIADB_IP}" -uroot -p"${SOURCE_DB_ROOT_PASSWORD}" -e "SHOW databases;"
-
     # List databases on podified database
-    echo "Show OSP 18 databases"
-    oc run mariadb-client -n ${OSP18_NAMESPACE} --image "$MARIADB_IMAGE" -i --rm --restart=Never -- \
-        mysql -rsh "$PODIFIED_MARIADB_IP" -uroot -p"$PODIFIED_DB_ROOT_PASSWORD" -e 'SHOW databases;'
-    oc run mariadb-client --image "$MARIADB_IMAGE" -i --rm --restart=Never -- \
-        mysql -rsh "$PODIFIED_CELL1_MARIADB_IP" -uroot -p"$PODIFIED_DB_ROOT_PASSWORD" -e 'SHOW databases;'
+    # echo "Show OSP 18 databases"
+    # oc run mariadb-client -n "${OSP18_NAMESPACE}" --image "$MARIADB_IMAGE" -i --rm --restart=Never -- \
+    #     mysql -rsh "$PODIFIED_MARIADB_IP" -uroot -p"$PODIFIED_DB_ROOT_PASSWORD" -e 'SHOW databases;'
+    # oc run mariadb-client --image "$MARIADB_IMAGE" -i --rm --restart=Never -- \
+    #     mysql -rsh "$PODIFIED_CELL1_MARIADB_IP" -uroot -p"$PODIFIED_DB_ROOT_PASSWORD" -e 'SHOW databases;'
 
     #
     # Create a dump of all databases on the source MariaDB
-    echo "Dumping OSPdO databases"
+    echo "Extracting OSPdO databases to local directory, ./mariadbs"
     oc rsh -n "${OSPDO_NAMESPACE}" mariadb-copy-data <<EOF
   mysql -h"${SOURCE_MARIADB_IP}" -uroot -p"${SOURCE_DB_ROOT_PASSWORD}" \
   -N -e "show databases" | grep -E -v "schema|mysql|gnocchi" | \
@@ -305,9 +249,32 @@ migrate_mariadb_3_6() {
       "\${dbname}" > /backup/"\${dbname}".sql;
    done
 EOF
+    mkdir -p $MARIADB_BACKUP_DIR
+    echo "Copying OSPdO databases to local directory, $MARIADB_BACKUP_DIR"
+    oc rsync mariadb-copy-data:/backup/ ./"$MARIADB_BACKUP_DIR" -n "${OSPDO_NAMESPACE}" || {
+        echo "Failed to rsync mariadb-copy-data:/backup to ./$MARIADB_BACKUP_DIR"
+        exit 1
+    }
+}
 
+restore_mariadb() {
+
+    PODIFIED_MARIADB_IP=$(oc get svc --selector "mariadb/name=openstack" -ojsonpath='{.items[0].spec.clusterIP}' -n "${OSP18_NAMESPACE}")
+    PODIFIED_CELL1_MARIADB_IP=$(oc get svc --selector "mariadb/name=openstack-cell1" -ojsonpath='{.items[0].spec.clusterIP}' -n "${OSP18_NAMESPACE}")
+    PODIFIED_DB_ROOT_PASSWORD=$(oc get -o json secret/osp-secret -n "${OSP18_NAMESPACE}" | jq -r .data.DbRootPassword | base64 -d)
+
+    create_mariadb_data "${OSP18_NAMESPACE}" "internalapi" || {
+        echo "Failed to create mariadb-copy-data pod"
+        exit 1
+    }
+
+    # Copy the .sql files to the mariadb-copy-data pod
+    oc rsync ./"$MARIADB_BACKUP_DIR" mariadb-copy-data:/backup -n "${OSP18_NAMESPACE}" || {
+        echo "Failed to rsync ./$MARIADB_BACKUP_DIR to mariadb-copy-data:/backup"
+        exit 1
+    }
     # Restore the databases from .sql files into the control plane MariaDB:
-    oc rsh -n "${OSPDO_NAMESPACE}" mariadb-copy-data <<EOF
+    oc rsh -n "${OSPDO_NAMESPACE}" -- mariadb-copy-data <<EOF
   # db schemas to rename on import
   declare -A db_name_map
   db_name_map['nova']='nova_cell1'
@@ -353,7 +320,8 @@ EOF
     "delete from nova_cell1.services where host not like '%nova-cell1-%' and services.binary != 'nova-compute';"
 EOF
 
-    . ~/.source_cloud_exported_variables
+# shellcheck source=SCRIPTDIR
+    . "$EXPORTED_CLOUD_VARIABLES"
 
     # use 'oc exec' and 'mysql -rs' to maintain formatting
     dbs=$(oc -n "${OSP18_NAMESPACE}" exec openstack-galera-0 -c galera -- mysql -rs -uroot "-p$PODIFIED_DB_ROOT_PASSWORD" -e 'SHOW databases;')
@@ -370,15 +338,15 @@ EOF
     echo "$c1dbs" | grep -Eq '\bnova_cell1\b'
 
     # ensure default cell renamed to cell1, and the cell UUIDs retained intact
-    novadb_mapped_cells=$(oc -n ${OSP18_NAMESPACE} exec openstack-galera-0 -c galera -- mysql -rs -uroot "-p$PODIFIED_DB_ROOT_PASSWORD" \
+    novadb_mapped_cells=$(oc -n "${OSP18_NAMESPACE}" exec openstack-galera-0 -c galera -- mysql -rs -uroot "-p$PODIFIED_DB_ROOT_PASSWORD" \
         nova_api -e 'select uuid,name,transport_url,database_connection,disabled from cell_mappings;')
     uuidf='\S{8,}-\S{4,}-\S{4,}-\S{4,}-\S{12,}'
     left_behind=$(comm -23 \
-        <(echo $PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS | grep -oE " $uuidf \S+") \
-        <(echo $novadb_mapped_cells | tr -s "| " " " | grep -oE " $uuidf \S+"))
+        <(echo "$PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS" | grep -oE " $uuidf \S+") \
+        <(echo "$novadb_mapped_cells" | tr -s "| " " " | grep -oE " $uuidf \S+"))
     changed=$(comm -13 \
-        <(echo $PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS | grep -oE " $uuidf \S+") \
-        <(echo $novadb_mapped_cells | tr -s "| " " " | grep -oE " $uuidf \S+"))
+        <(echo "$PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS" | grep -oE " $uuidf \S+") \
+        <(echo "$novadb_mapped_cells" | tr -s "| " " " | grep -oE " $uuidf \S+"))
     # shellcheck disable=SC2046,SC2086
     test $(grep -Ec ' \S+$' <<<$left_behind) -eq 1
     # shellcheck disable=SC2086
@@ -400,51 +368,139 @@ EOF
 # 3.7 steps 1..2
 # Prepare the OVN DBs copy dir and the adoption helper pod
 #  (pick the storage requests to fit the OVN databases sizes)
-create_ovn_copy_data_pod_1__2() {
+create_ovn_copy_data() {
+    export NAMESPACE="$1"
+
+    echo "Create/update ovn-data-pvc"
+    export STORAGE_CLASS="${STORAGE_CLASS}"
+    # shellcheck disable=SC2016
+    envsubst '$NAMESPACE,$STORAGE_CLASS' <yamls/ovn-data-pvc.yaml | oc apply -f - || {
+        echo "Failed to set apply ovn-data-pvc"
+        exit 1
+    }
+
+    export INTERNAL_API="${OSPDO_INTERNAL_API_NET}"
+    echo "Create/update ovn-copy-data-pod"
+    # shellcheck disable=SC2016
+    envsubst '$NAMESPACE,$INTERNAL_API,$OVSDB_IMAGE' <yamls/ovn-copy-data-pod.yaml | oc apply -f - || {
+        echo "Failed to set apply ovn-copy-data-pod"
+        exit 1
+    }
+
+    # Need to wait for the pods to be created
+    while ! oc wait --for=condition=Ready pod/ovn-copy-data --timeout=30s -n "${NAMESPACE}"; do sleep 10; done
+}
+
+# 3.7 step 4 Backup OVN databases on a TLS everywhere environment.
+extract_ovn_dbs() {
+    export NAMESPACE="$1"
+
+    create_ovn_copy_data "${NAMESPACE}"
+
+    echo "Create backup of NB DB"
+    oc -n "${NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6641 > /backup/ovs-nb.db" || {
+        echo "ERROR: Failed to backup OVN NB DB"
+        exit 1
+    }
+
+    echo "Create backup of SB DB"
+    oc -n "${NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6642 > /backup/ovs-sb.db" || {
+        echo "ERROR: Failed to backup OVN SB DB"
+        exit 1
+    }
+}
+
+deploy_backend_services() {
+
     echo "Creating ovn-data-cert secret"
     envsubst <yamls/ovn-data-cert.yaml | oc apply -f - >/dev/null || {
         echo "ERROR: Failed to create ovn-data-cert secret"
         exit 1
     }
 
-    echo "Creating ovn-data-pvc"
-    envsubst <yamls/ovn-data-pvc.yaml | oc apply -f - || {
-        echo "Failed to set apply ovn-data-pvc"
+    envsubst <yamls/osp-secret.yaml | oc apply -f - || {
+        echo "Failed to create osp-secret"
         exit 1
     }
 
-    echo "Creating ovn-copy-data-pod"
-    envsubst <yamls/ovn-copy-data-pod.yaml | oc apply -f - || {
-        echo "Failed to set apply ovn-copy-data-pod"
+    ADMIN_PASSWORD=$(grep <"${PASSWORD_FILE}" ' AdminPassword:' | awk -F ': ' '{ print $2; }')
+
+    AODH_PASSWORD=$(grep <"${PASSWORD_FILE}" ' AodhPassword:' | awk -F ': ' '{ print $2; }')
+    BARBICAN_PASSWORD=$(grep <"${PASSWORD_FILE}" ' BarbicanPassword:' | awk -F ': ' '{ print $2; }')
+    BARBICANKEK_PASSWORD=$(grep <"${PASSWORD_FILE}" ' BarbicanSimpleCryptoKek:' | awk -F ': ' '{ print $2; }')
+    CEILOMETER_METERING_SECRET=$(grep <"${PASSWORD_FILE}" ' CeilometerMeteringSecret:' | awk -F ': ' '{ print $2; }')
+    CEILOMETER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CeilometerPassword:' | awk -F ': ' '{ print $2; }')
+    CINDER_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CinderPassword:' | awk -F ': ' '{ print $2; }')
+    CONGRESS_PASSWORD=$(grep <"${PASSWORD_FILE}" ' CongressPassword:' | awk -F ': ' '{ print $2; }')
+    DESIGNATE_PASSWORD=$(grep <"${PASSWORD_FILE}" ' DesignatePassword:' | awk -F ': ' '{ print $2; }')
+    GLANCE_PASSWORD=$(grep <"${PASSWORD_FILE}" ' GlancePassword:' | awk -F ': ' '{ print $2; }')
+    HEAT_AUTH_ENCRYPTION_KEY=$(grep <"${PASSWORD_FILE}" ' HeatAuthEncryptionKey:' | awk -F ': ' '{ print $2; }')
+    HEAT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' HeatPassword:' | awk -F ': ' '{ print $2; }')
+    IRONIC_PASSWORD=$(grep <"${PASSWORD_FILE}" ' IronicPassword:' | awk -F ': ' '{ print $2; }')
+    MANILA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' ManilaPassword:' | awk -F ': ' '{ print $2; }')
+    NEUTRON_PASSWORD=$(grep <"${PASSWORD_FILE}" ' NeutronPassword:' | awk -F ': ' '{ print $2; }')
+    NOVA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' NovaPassword:' | awk -F ': ' '{ print $2; }')
+    OCTAVIA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' OctaviaPassword:' | awk -F ': ' '{ print $2; }')
+    PLACEMENT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' PlacementPassword:' | awk -F ': ' '{ print $2; }')
+    MYSQLROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -F ': ' '{ print $2; }')
+    SWIFT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' SwiftPassword:' | awk -F ': ' '{ print $2; }')
+
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "AdminPassword=$ADMIN_PASSWORD"
+
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "AodhPassword=$AODH_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "BarbicanPassword=$BARBICAN_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "BarbicanSimpleCryptoKEK=$BARBICANKEK_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "CeilometerMeteringSecret=$CEILOMETER_METERING_SECRET"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "CeilometerPassword=$CEILOMETER_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "CinderPassword=$CINDER_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "CongressPassword=$CONGRESS_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "DesignatePassword=$DESIGNATE_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "DbRootPassword=$MYSQLROOT_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "GlancePassword=$GLANCE_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "HeatAuthEncryptionKey=$HEAT_AUTH_ENCRYPTION_KEY"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "HeatPassword=$HEAT_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "IronicPassword=$IRONIC_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "IronicInspectorPassword=$IRONIC_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "ManilaPassword=$MANILA_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "NeutronPassword=$NEUTRON_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "NovaPassword=$NOVA_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "OctaviaPassword=$OCTAVIA_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "PlacementPassword=$PLACEMENT_PASSWORD"
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "SwiftPassword=$SWIFT_PASSWORD"
+
+    oc set data secret/osp-secret -n "${OSP18_NAMESPACE}" "MetadataSecret=12345678"
+
+    envsubst <yamls/openstackcontrolplane.yaml | oc apply -f - || {
+        echo "Failed to apply openstackcontrolplane"
         exit 1
     }
 
-    echo "Waiting for ovn-copy-data pod to start"
-    oc -n "${OSP18_NAMESPACE}" wait --for=condition=Ready pod/ovn-copy-data --timeout=30s || {
-        echo "ERROR: ovn-copy-data pod did not start"
+    # Cannot check for openstackcontrolplane to be ready as it will not be ready until
+    # openstackclient is deployed.  openstackclient cannot be deployed until Keystone is
+    # available.
+    # echo "Wait for openstackcontrolplane to be Ready"
+    # oc wait openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --for condition=Ready --timeout=600s || {
+    #     echo "Failed to wait for openstackcontrolplane to be Ready"
+    #     exit 1
+    # }
+
+    echo "Wait for galera-0..."
+    oc wait pod openstack-galera-0 -n "${OSP18_NAMESPACE}" --for=jsonpath='{.status.phase}'=Running --timeout=30s || {
+        echo "ERROR: Galera pod did not start"
         exit 1
     }
-}
 
-# 3.7 step 4 Backup OVN databases on a TLS everywhere environment.
-backup_ovn_dbs_3__4() {
-    echo "Create backup of NB DB"
-    oc -n "${OSP18_NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6641 > /backup/ovs-nb.db" || {
-        echo "ERROR: Failed to backup OVN NB DB"
-        exit 1
-    }
-
-    echo "Create backup of SB DB"
-    oc -n ${OSP18_NAMESPACE} exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6642 > /backup/ovs-sb.db" || {
-        echo "ERROR: Failed to backup OVN SB DB"
+    echo "Wait for cell1-galera-0 to be Ready"
+    oc wait pod openstack-cell1-galera-0 -n "${OSP18_NAMESPACE}" --for=jsonpath='{.status.phase}'=Running --timeout=30s || {
+        echo "ERROR: Galera cell1 pod did not start"
         exit 1
     }
 }
 
 # 3.7 steps 5..6 Start the control plane OVN database services prior to import, keeping northd/ovn-controller stopped.
-start_ovn_dbs_5__6() {
+start_ovn_dbs() {
     echo "Starting ovn service in OSP 18"
-    oc -n ${OSP18_NAMESPACE} patch openstackcontrolplane openstack --type=merge --patch '
+    oc -n "${OSP18_NAMESPACE}" patch openstackcontrolplane openstack --type=merge --patch '
 spec:
   ovn:
     enabled: true
@@ -466,18 +522,18 @@ spec:
           node: non-existing-node-name
 '
     # Need to wait for the pods to be created
-    while ! oc get pod --selector=service=ovsdbserver-nb -n ${OSP18_NAMESPACE} | grep ovsdbserver-nb; do sleep 10; done
+    while ! oc get pod --selector=service=ovsdbserver-nb -n "${OSP18_NAMESPACE}" | grep ovsdbserver-nb; do sleep 10; done
 
     echo "Waiting for OVN NB DB pods to start"
-    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=ovsdbserver-nb -n ${OSP18_NAMESPACE} || {
+    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=ovsdbserver-nb -n "${OSP18_NAMESPACE}" || {
         echo "ERROR: Failed to start OVN NB DB pod"
         exit 1
     }
 
-    while ! oc get pod --selector=service=ovsdbserver-sb -n ${OSP18_NAMESPACE} | grep ovsdbserver-sb; do sleep 10; done
+    while ! oc get pod --selector=service=ovsdbserver-sb -n "${OSP18_NAMESPACE}" | grep ovsdbserver-sb; do sleep 10; done
 
     echo "Waiting for OVN SB DB pods to start"
-    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=ovsdbserver-sb -n ${OSP18_NAMESPACE} || {
+    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=ovsdbserver-sb -n "${OSP18_NAMESPACE}" || {
         echo "ERROR: Failed to start OVN SB DB pod"
         exit 1
     }
@@ -485,31 +541,31 @@ spec:
 
 # 3.7 steps 7..9 Update the OVN DB schemas to the OSP 18 version.
 update_ovn_db_schemas_7__9() {
-    while ! oc get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-nb-0" -n ${OSP18_NAMESPACE} | grep ovsdbserver-nb; do sleep 10; done
+    while ! oc get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-nb-0" -n "${OSP18_NAMESPACE}" | grep ovsdbserver-nb; do sleep 10; done
 
     echo "Getting OVN NB DB IPs in OSP 18"
-    PODIFIED_OVSDB_NB_IP=$(oc -n ${OSP18_NAMESPACE} get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-nb-0" -ojsonpath='{.items[0].spec.clusterIP}') || {
+    PODIFIED_OVSDB_NB_IP=$(oc -n "${OSP18_NAMESPACE}" get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-nb-0" -ojsonpath='{.items[0].spec.clusterIP}') || {
         echo "ERROR: Failed to get OVN NB DB IP"
         exit 1
     }
 
-    while ! oc get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-sb-0" -n ${OSP18_NAMESPACE} | grep ovsdbserver-sb; do sleep 10; done
+    while ! oc get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-sb-0" -n "${OSP18_NAMESPACE}" | grep ovsdbserver-sb; do sleep 10; done
 
     echo "Getting OVN SB DB IPs in OSP 18"
-    PODIFIED_OVSDB_SB_IP=$(oc -n ${OSP18_NAMESPACE} get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-sb-0" -ojsonpath='{.items[0].spec.clusterIP}') || {
+    PODIFIED_OVSDB_SB_IP=$(oc -n "${OSP18_NAMESPACE}" get svc --selector "statefulset.kubernetes.io/pod-name=ovsdbserver-sb-0" -ojsonpath='{.items[0].spec.clusterIP}') || {
         echo "ERROR: Failed to get OVN SB DB IP"
         exit 1
     }
 
     echo "Converting OVN NB DB schema"
-    oc -n ${OSP18_NAMESPACE} exec ovn-copy-data -- bash -c "ovsdb-client get-schema --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
+    oc -n "${OSP18_NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client get-schema --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
      --certificate=/etc/pki/tls/misc/tls.crt ssl:$PODIFIED_OVSDB_NB_IP:6641 > /backup/ovs-nb.ovsschema && ovsdb-tool convert /backup/ovs-nb.db /backup/ovs-nb.ovsschema" || {
         echo "ERROR: Failed to convert OVN NB DB"
         exit 1
     }
 
     echo "Converting OVN SB DB schema"
-    oc -n ${OSP18_NAMESPACE} exec ovn-copy-data -- bash -c "ovsdb-client get-schema --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
+    oc -n "${OSP18_NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client get-schema --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
      --certificate=/etc/pki/tls/misc/tls.crt ssl:$PODIFIED_OVSDB_SB_IP:6642 > /backup/ovs-sb.ovsschema && ovsdb-tool convert /backup/ovs-sb.db /backup/ovs-sb.ovsschema" || {
         echo "ERROR: Failed to convert OVN SB DB"
         exit 1
@@ -519,25 +575,25 @@ update_ovn_db_schemas_7__9() {
 # 3.7 steps 10..12 Restore the OVN DBs from OSPdO to OSP 18.
 restore_ovn_dbs_10__12() {
     echo "Restoring OVN NB DB from OSPdO to OSP 18"
-    oc -n ${OSP18_NAMESPACE} exec ovn-copy-data -- bash -c "ovsdb-client restore --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
+    oc -n "${OSP18_NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client restore --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
    --certificate=/etc/pki/tls/misc/tls.crt ssl:$PODIFIED_OVSDB_NB_IP:6641 < /backup/ovs-nb.db" || {
         echo "ERROR: Failed to restore OVN NB DB"
         exit 1
     }
 
     echo "Restoring OVN SB DB from OSPdO to OSP 18"
-    oc -n ${OSP18_NAMESPACE} exec ovn-copy-data -- bash -c "ovsdb-client restore --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
+    oc -n "${OSP18_NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client restore --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key \
     --certificate=/etc/pki/tls/misc/tls.crt ssl:$PODIFIED_OVSDB_SB_IP:6642 < /backup/ovs-sb.db" || {
         echo "ERROR: Failed to restore OVN SB DB"
         exit 1
     }
 
-    oc -n ${OSP18_NAMESPACE} exec -it ovsdbserver-nb-0 -- ovn-nbctl show || {
+    oc -n "${OSP18_NAMESPACE}" exec -it ovsdbserver-nb-0 -- ovn-nbctl show || {
         echo "ERROR: OVN NB DB not running with correct schema"
         exit 1
     }
 
-    oc -n ${OSP18_NAMESPACE} exec -it ovsdbserver-sb-0 -- ovn-sbctl list Chassis || {
+    oc -n "${OSP18_NAMESPACE}" exec -it ovsdbserver-sb-0 -- ovn-sbctl list Chassis || {
         echo "ERROR: OVN SB DB not running with correct schema"
         exit 1
     }
@@ -558,16 +614,16 @@ spec:
         exit 1
     fi
 
-    while ! oc get pod --selector=service=ovn-northd -n ${OSP18_NAMESPACE} | grep ovn-northd; do sleep 10; done
+    while ! oc get pod --selector=service=ovn-northd -n "${OSP18_NAMESPACE}" | grep ovn-northd; do sleep 10; done
 
     echo "Waiting for OVN Northd pods to start"
-    oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=ovn-northd || {
+    oc -n "${OSP18_NAMESPACE}" wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=ovn-northd || {
         echo "ERROR: Failed to start ovn-northd pod"
         exit 1
     }
 
     echo "Start ovncontroller"
-    oc -n ${OSP18_NAMESPACE} patch openstackcontrolplane openstack --type=json -p="[{'op': 'remove', 'path': '/spec/ovn/template/ovnController/nodeSelector'}]" || {
+    oc -n "${OSP18_NAMESPACE}" patch openstackcontrolplane openstack --type=json -p="[{'op': 'remove', 'path': '/spec/ovn/template/ovnController/nodeSelector'}]" || {
         echo "ERROR: Failed to patch openstackcontrolplane to enable ovncontroller"
         exit 1
     }
@@ -575,7 +631,7 @@ spec:
 }
 
 # 3.7 step 15 Delete the ovn-copy-data pod and the ovn-data-pvc.
-delete_ovn_copy_data_15() {
+delete_ovn_copy_data() {
     echo "Deleting ovn-copy-data pod"
     oc delete pod ovn-copy-data || {
         echo "ERROR: Failed to delete ovn-copy-data pod"
@@ -612,7 +668,7 @@ stop_ospdo_ovn_svcs_16() {
     for service in "${ServicesToStop[@]}"; do
         for i in {1..3}; do
             SSH_CMD=CONTROLLER${i}_SSH
-            if [ ! -z "${!SSH_CMD}" ]; then
+            if [ -n "${!SSH_CMD}" ]; then
                 if ! ${!SSH_CMD} systemctl show "$service" | grep ActiveState=inactive >/dev/null; then
                     echo "ERROR: Service $service still running on controller $i"
                 else
@@ -627,21 +683,21 @@ case $1 in
 migrate)
     check_openstack
     ;;
-retrieve-topology | 3_1)
-    retrieve_topology_3_1
+retrieve-ospdo_db_info | 1)
+    retrieve_ospdo_db_info
     ;;
-deploy-backen-services | 3_2)
-    deploy_backend_services_3_2
+deploy-backend-services | 3_2)
+    deploy_backend_services
     ;;
-stop-osp-services | 3_5)
-    stop_osp_services_3_5
+stop-ospdo-services | 2)
+    stop_ospdo_services
     ;;
 create-mariadb-copy-data | cmcd)
     [ $# -lt 4 ] && {
         usage
         exit 1
     }
-    create_mariadb_data "$2" "$3" "$4"
+    create_mariadb_data "$2" "$3"
     ;;
 delete-mariadb-copy-data | dmcd)
     [ $# -lt 2 ] && {
@@ -650,42 +706,29 @@ delete-mariadb-copy-data | dmcd)
     }
     delete_mariadb_data "$2"
     ;;
-migrate-mariadb | 3_6)
-    migrate_mariadb_3_6
+extract-mariadb | 3)
+    extract_mariadb
     ;;
-create-ovn-copy-data | 3_7_1)
-    create_ovn_copy_data_pod_1__2
+create-ovn-copy-data)
+    create_ovn_copy_data "$2"
     ;;
-delete-ovn-copy-data | 3_7_15)
-    delete_ovn_copy_data_15
+delete-ovn-copy-data)
+    delete_ovn_copy_data
+    ;;
+extract-ovn-dbs | 4)
+    extract_ovn_dbs "$2"
     ;;
 migrate-ovn-data | 3_7)
-    create_ovn_copy_data_pod_1__2
-    backup_ovn_dbs_3__4
-    start_ovn_dbs_5__6
+    create_ovn_copy_data "$OSP18_NAMESPACE"
+    start_ovn_dbs
     update_ovn_db_schemas_7__9
     restore_ovn_dbs_10__12
     start_northd_13__14
-    delete_ovn_copy_data_15
+    delete_ovn_copy_data
     stop_ospdo_ovn_svcs_16
     ;;
 create-mariadb-data)
-    create_mariadb_data "${OSPDO_NAMESPACE}" "internalapi-static" "${CONTROLLER_NODE}" 
-    ;;
-all)
-    retrieve_topology_3_1
-    deploy_backend_services_3_2
-    stop_osp_services_3_5
-    create_mariadb_data "${OSPDO_NAMESPACE}" "${OSPDO_INTERNAL_API_NET}" "${CONTROLLER_NODE}"
-    migrate_mariadb_3_6
-    create_ovn_copy_data_pod_1__2
-    backup_ovn_dbs_3__4
-    start_ovn_dbs_5__6
-    update_ovn_db_schemas_7__9
-    restore_ovn_dbs_10__12
-    start_northd_13__14
-    delete_ovn_copy_data_15
-    stop_ospdo_ovn_svcs_16
+    create_mariadb_data "${OSPDO_NAMESPACE}" "internalapi-static"
     ;;
 *)
     echo "Invalid command line argument. <$1>"

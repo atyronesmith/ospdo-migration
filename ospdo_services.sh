@@ -183,7 +183,7 @@ if [ $# -lt 1 ]; then
 fi
 
 case $1 in
-check)
+check-openstack)
     check_openstack
     ;;
 check-systemd)

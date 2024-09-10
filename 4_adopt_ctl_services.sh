@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# shellcheck source=./common.sh
 . common.sh
 
 usage() {
@@ -56,16 +57,16 @@ spec:
       secret: osp-secret
 '
   echo "Wait for openstackcontrolplane to be Ready"
-  oc wait openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --for condition=Ready --timeout=600s || {
+  oc wait openstackcontrolplane openstack -n "${OSP18_NAMESPACE}" --for condition=Ready --timeout=600s || {
     echo "Failed to wait for openstackcontrolplane to be Ready"
     exit 1
   }
 
   # Clean up old services and endpoints that still point to the old control plane, excluding the Identity service and its endpoints
-  $OS_CLIENT openstack endpoint list | grep keystone | awk '/admin/{ print $2; }' | xargs -t $OS_CLIENT openstack endpoint delete || true
+  $OS_CLIENT openstack endpoint list | grep keystone | awk '/admin/{ print $2; }' | xargs -t "$OS_CLIENT" openstack endpoint delete || true
 
   for service in aodh heat heat-cfn barbican cinderv3 glance manila manilav2 neutron nova placement swift ironic-inspector ironic; do
-    $OS_CLIENT openstack service list | awk "/ $service /{ print \$2; }" | xargs -t $OS_CLIENT openstack service delete || true
+    $OS_CLIENT openstack service list | awk "/ $service /{ print \$2; }" | xargs -t "$OS_CLIENT" openstack service delete || true
   done
 
   $OS_CLIENT openstack endpoint list | grep keystone || {
@@ -111,12 +112,12 @@ spec:
 '
   # Wait for barbican pods to start
   for component in barbican-api barbican-worker keystone-listener; do
-    while ! oc get pod --selector='service=barbican,component='$component'' -n ${OSP18_NAMESPACE} | grep "$component"; do sleep 10; done
+    while ! oc get pod --selector='service=barbican,component='$component'' -n "${OSP18_NAMESPACE}" | grep "$component"; do sleep 10; done
   done
 
   # Wait for barbican pods to be ready
   for component in barbican-api barbican-worker keystone-listener; do
-    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector='service=barbican,component='$component'' -n ${OSP18_NAMESPACE} || {
+    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector='service=barbican,component='$component'' -n "${OSP18_NAMESPACE}" || {
       echo "ERROR: Failed to start barbican: $component"
       exit 1
     }
@@ -132,7 +133,7 @@ spec:
 }
 
 adopt_networking_4_3() {
-  oc -n ${OSP18_NAMESPACE} patch openstackcontrolplane openstack --type=merge --patch '
+  oc -n "${OSP18_NAMESPACE}" patch openstackcontrolplane openstack --type=merge --patch '
 spec:
   neutron:
     enabled: true
@@ -157,10 +158,10 @@ spec:
 '
 
   echo "Wait for Neutron pod to start"
-  while ! oc get pod --selector=service=neutron -n ${OSP18_NAMESPACE} | grep neutron; do sleep 10; done
+  while ! oc get pod --selector=service=neutron -n "${OSP18_NAMESPACE}" | grep neutron; do sleep 10; done
 
   echo "Wait for Neutron pod to be ready"
-  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=neutron || {
+  oc -n "${OSP18_NAMESPACE}" wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=neutron || {
     echo "ERROR: Failed to start neutron pod"
     exit 1
   }
@@ -220,7 +221,7 @@ EOF
   # the networkAttachments must match how swift was configured in OSPdO
   #
   # shellcheck disable=SC2016
-  oc -n ${OSP18_NAMESPACE} patch openstackcontrolplane openstack --type=merge --patch '
+  oc -n "${OSP18_NAMESPACE}" patch openstackcontrolplane openstack --type=merge --patch '
 spec:
   swift:
     enabled: true
@@ -255,10 +256,10 @@ spec:
 '
 
   echo "Wait for Swift pod to start"
-  while ! oc get pod --selector=service=swift -n ${OSP18_NAMESPACE} | grep swift; do sleep 10; done
+  while ! oc get pod --selector=service=swift -n "${OSP18_NAMESPACE}" | grep swift; do sleep 10; done
 
   echo "Wait for Swift pod to be ready"
-  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=swift || {
+  oc -n "${OSP18_NAMESPACE}" wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=swift || {
     echo "ERROR: Failed to start neutron pod"
     exit 1
   }
@@ -267,7 +268,7 @@ spec:
 
   test_string="Hello World!"
   echo "$test_string" >obj
-  oc -n ${OSP18_NAMESPACE} cp obj openstackclient:/tmp/obj || {
+  oc -n "${OSP18_NAMESPACE}" cp obj openstackclient:/tmp/obj || {
     echo "ERROR: Failed to copy object to openstackclient"
     exit 1
   }
@@ -297,10 +298,10 @@ adopt_image_service_4_5() {
   oc patch openstackcontrolplane openstack --type=merge --patch-file=yamls/glance_swift.patch
 
   echo "Wait for Glance pod to start"
-  while ! oc get pod --selector=service=glance -n ${OSP18_NAMESPACE} | grep glance; do sleep 10; done
+  while ! oc get pod --selector=service=glance -n "${OSP18_NAMESPACE}" | grep glance; do sleep 10; done
 
   echo "Wait for Glance pod to be ready"
-  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=glance || {
+  oc -n "${OSP18_NAMESPACE}" wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=glance || {
     echo "ERROR: Failed to start glance pod"
     exit 1
   }
@@ -345,10 +346,10 @@ spec:
               type: LoadBalancer
 '
   echo "Wait for Glance pod to start"
-  while ! oc get pod --selector=service=placement -n ${OSP18_NAMESPACE} | grep placement; do sleep 10; done
+  while ! oc get pod --selector=service=placement -n "${OSP18_NAMESPACE}" | grep placement; do sleep 10; done
 
   echo "Wait for Glance pod to be ready"
-  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=placement || {
+  oc -n "${OSP18_NAMESPACE}" wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=placement || {
     echo "ERROR: Failed to start glance pod"
     exit 1
   }
@@ -378,7 +379,7 @@ spec:
 
 # Adopt the Compute service
 adopt_compute_service_4_7() {
-  oc patch openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --type=merge --patch '
+  oc patch openstackcontrolplane openstack -n "${OSP18_NAMESPACE}" --type=merge --patch '
 spec:
   nova:
     enabled: true
@@ -446,10 +447,10 @@ spec:
 '
 
   echo "Wait for Nova pod to start"
-  while ! oc get pod --selector=service=nova-api -n ${OSP18_NAMESPACE} | grep nova-api; do sleep 10; done
+  while ! oc get pod --selector=service=nova-api -n "${OSP18_NAMESPACE}" | grep nova-api; do sleep 10; done
 
   echo "Wait for Nova pod to be ready"
-  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=nova-api || {
+  oc -n "${OSP18_NAMESPACE}" wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=nova-api || {
     echo "ERROR: Failed to start nova pod"
     exit 1
   }
@@ -463,7 +464,7 @@ spec:
     exit 1
   }
 
-  # . ~/.source_cloud_exported_variables
+  # . ~/."$EXPORTED_CLOUD_VARIABLES"
   # echo $PULL_OPENSTACK_CONFIGURATION_NOVAMANAGE_CELL_MAPPINGS
   # oc rsh nova-cell0-conductor-0 nova-manage cell_v2 list_cells | grep -F '| cell1 |'
 }
@@ -489,11 +490,11 @@ adopt_block_storage_4_8() {
   # }
 
   $CONTROLLER1_SSH sudo cat /var/lib/config-data/puppet-generated/cinder/etc/cinder/cinder.conf >cinder.conf
-  oc patch openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --type=merge --patch-file=yamls/cinder.patch
+  oc patch openstackcontrolplane openstack -n "${OSP18_NAMESPACE}" --type=merge --patch-file=yamls/cinder.patch
 }
 
 adopt_dashboard_service_4_9() {
-  oc patch openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --type=merge --patch '
+  oc patch openstackcontrolplane openstack -n "${OSP18_NAMESPACE}" --type=merge --patch '
 spec:
   horizon:
     enabled: true
@@ -505,10 +506,10 @@ spec:
 '
 
   echo "Wait for Horizon pod to start"
-  while ! oc get pod --selector=service=horizon -n ${OSP18_NAMESPACE} | grep horizon; do sleep 10; done
+  while ! oc get pod --selector=service=horizon -n "${OSP18_NAMESPACE}" | grep horizon; do sleep 10; done
 
   echo "Wait for Horizon pod to be ready"
-  oc -n ${OSP18_NAMESPACE} wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=horizon || {
+  oc -n "${OSP18_NAMESPACE}" wait --for=jsonpath='{.status.phase}'=Running pod --selector=service=horizon || {
     echo "ERROR: Failed to start horizon pod"
     exit 1
   }
@@ -516,7 +517,7 @@ spec:
 }
 
 adopt_orchestration_service_4_11() {
-  oc patch openstackcontrolplane openstack -n ${OSP18_NAMESPACE} --type=merge --patch '
+  oc patch openstackcontrolplane openstack -n "${OSP18_NAMESPACE}" --type=merge --patch '
 spec:
   heat:
     enabled: true
@@ -535,12 +536,12 @@ spec:
 
   echo "Wait for Heat pods to start"
   for component in heat heat-api heat-cfnapi heat-engine; do
-    while ! oc get pod --selector='service=heat,component='$component'' -n ${OSP18_NAMESPACE} | grep "$component"; do sleep 10; done
+    while ! oc get pod --selector='service=heat,component='$component'' -n "${OSP18_NAMESPACE}" | grep "$component"; do sleep 10; done
   done
 
   echo "Wait for Horizon pods to be ready"
   for component in heat heat-api heat-cfnapi heat-engine; do
-    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector='service=heat,component='$component'' -n ${OSP18_NAMESPACE} || {
+    oc wait --for=jsonpath='{.status.phase}'=Running pod --selector='service=heat,component='$component'' -n "${OSP18_NAMESPACE}" || {
       echo "ERROR: Failed to start heat: $component"
       exit 1
     }

@@ -20,7 +20,7 @@ $IPA_SSH certutil -L -d /etc/pki/pki-tomcat/alias || {
 # auditSigningCert cert-pki-ca                                 u,u,Pu
 # Server-Cert cert-pki-ca                                      u,u,u
 
-# Export the certificate and key from the /etc/pki/pki-tomcat/alias directory:
+# Export the certificate and key from the /etc/pki/pki-tomcat/alias directory
 $IPA_SSH pk12util -o /tmp/freeipa.p12 -n 'caSigningCert cert-pki-ca' \
     -d /etc/pki/pki-tomcat/alias -k /etc/pki/pki-tomcat/alias/pwdfile.txt \
     -w /etc/pki/pki-tomcat/alias/pwdfile.txt || {
@@ -36,16 +36,22 @@ oc get secret rootca-internal -n ${OSP18_NAMESPACE} >/dev/null 2>&1 || {
     }
 }
 
-oc patch secret rootca-internal -n ${OSP18_NAMESPACE} -p="{\"data\":{\"ca.crt\": \
-    \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
-    -nokeys | openssl x509 | base64 -w 0)\"}}" || {
-    echo "Unable to patch secret ca.crt."
+# Extract and save ca.crt
+$IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
+    -nokeys | openssl x509 | base64 -w 0 > extract/ca.crt || {
+    echo "Unable to save secret ca.crt."
     exit 1
 }
 
-oc patch secret rootca-internal -n ${OSP18_NAMESPACE} -p="{\"data\":{\"tls.crt\": \
-    \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
-    -nokeys | openssl x509 | base64 -w 0)\"}}" || {
+# oc patch secret rootca-internal -n ${OSP18_NAMESPACE} -p="{\"data\":{\"ca.crt\": \
+#     \"$($IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
+#     -nokeys | openssl x509 | base64 -w 0)\"}}" || {
+#     echo "Unable to patch secret ca.crt."
+#     exit 1
+# }
+
+$IPA_SSH openssl pkcs12 -in /tmp/freeipa.p12 -passin file:/etc/pki/pki-tomcat/alias/pwdfile.txt \
+    -nokeys | openssl x509 | base64 -w 0 > extract/tls.crt || {
     echo "Unable to patch secret tls.crt."
     exit 1
 }

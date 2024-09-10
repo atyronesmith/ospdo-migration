@@ -2,31 +2,30 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: ovn-copy-data
-  namespace: ${OSP18_NAMESPACE}
+  namespace: ${NAMESPACE}
   annotations:
     openshift.io/scc: anyuid
     k8s.v1.cni.cncf.io/networks: |-
       [
         {
-          "name": "internalapi-osp18", 
-          "namespace": "${OSP18_NAMESPACE}"
+          "name": "${INTERNAL_API}", 
+          "namespace": "${NAMESPACE}",
+          "ips": ["172.17.0.98/24"] 
         }
       ]
   labels:
     app: adoption
 spec:
-  nodeSelector:
-    type: openstack
   containers:
   - image: ${OVSDB_IMAGE}
     command: [ "sh", "-c", "sleep infinity"]
-    name: adoption
+    name: ovndb-client
     volumeMounts:
     - mountPath: /backup
       name: ovn-data
-    - mountPath: /etc/pki/tls/misc
-      name: ovn-data-cert
-      readOnly: true
+    # - mountPath: /etc/pki/tls/misc
+    #   name: ovn-data-cert
+    #   readOnly: true
   securityContext:
     allowPrivilegeEscalation: false
     capabilities:
@@ -38,6 +37,6 @@ spec:
   - name: ovn-data
     persistentVolumeClaim:
       claimName: ovn-data
-  - name: ovn-data-cert
-    secret:
-      secretName: ovn-data-cert
+  # - name: ovn-data-cert
+  #   secret:
+  #     secretName: ovn-data-cert

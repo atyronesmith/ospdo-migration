@@ -16,11 +16,10 @@ metadata:
   labels:
     app: adoption
 spec:
-  nodeName: ${TARGET_NODE}
   containers:
   - image: ${IMAGE}
     command: [ "sh", "-c", "sleep infinity"]
-    name: adoption
+    name: mariadb-client
     volumeMounts:
     - mountPath: /backup
       name: mariadb-data
