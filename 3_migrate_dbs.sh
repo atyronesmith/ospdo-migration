@@ -37,8 +37,6 @@ export SOURCE_MARIADB_IP
 MARIADB_IMAGE=quay.io/podified-antelope-centos9/openstack-mariadb:current-podified
 export MARIADB_IMAGE
 
-#RUN_OVERRIDES='{"apiVersion":"a1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"}}, "spec":{"nodeName": "ostest-master-0"}}'
-#RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"}},"spec":{"securityContext": "ostest-master-0"}}'
 RUN_OVERRIDES='{
     "apiVersion": "v1",
     "metadata": {
@@ -47,6 +45,7 @@ RUN_OVERRIDES='{
         }
     },
     "spec": {
+        "nodeName": "'"$CONTROLLER_NODE"'",
         "securityContext": {
             "allowPrivilegeEscalation": false, 
             "capabilities": { 
@@ -59,6 +58,7 @@ RUN_OVERRIDES='{
         }
     }
 }'
+
 #RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi\",\"namespace\": \"'"openstack"'\"}]"}}}'
 #RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-osp18\",\"namespace\": \"'"$OSP18_NAMESPACE"'\"}]"}}, "spec":{"nodeSelector": {"type" : "openstack"}}}'
 

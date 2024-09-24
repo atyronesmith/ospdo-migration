@@ -129,6 +129,7 @@ oc get secret tripleo-passwords -n $OSPDO_NAMESPACE -o json | jq -r '.data["trip
 
 # oc run mariadb-client -q --image ${MARIADB_IMAGE}\
 #   -it --rm --restart=Never --overrides="$RUN_OVERRIDES" /bin/bash
+#   -it --rm --restart=Never --overrides="$RUN_OVERRIDES" /bin/bash
 
 # permissions were wrong on the rabbitmq-cell1 pods mnesia folder for some reason
 # changing the permission caused it to work
