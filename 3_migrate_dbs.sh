@@ -19,8 +19,8 @@ usage() {
 OVSDB_IMAGE=registry.redhat.io/rhosp-dev-preview/openstack-ovn-base-rhel9:18.0
 export OVSDB_IMAGE
 
-SOURCE_OVSDB_IP=172.17.0.160 # TODO - get this from the source OVN DB
-export SOURCE_OVSDB_IP
+SOURCE_OVN_OVSDB_IP=172.17.0.160 # TODO - get this from the source OVN DB
+export SOURCE_OVN_OVSDB_IP
 
 SOURCE_DB_ROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -F ': ' '{ print $2; }') || {
     echo "Failed to get the source DB root password"
@@ -28,23 +28,45 @@ SOURCE_DB_ROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -
 }
 export SOURCE_DB_ROOT_PASSWORD
 
-SOURCE_MARIADB_IP=172.17.0.160
+# In OSPdO, the mysql service iP can be found in the tripleo-exports-default ConfigMap, section ctlplane-export.yaml
+cpexport=$(oc -n "${OSPDO_NAMESPACE}" get cm tripleo-exports-default -o json | jq -r '.data["ctlplane-export.yaml"]')
+SOURCE_MARIADB_IP=$(echo "$cpexport" | sed -e '0,/ MysqlInternal/d' | sed -n '0,/host_nobrackets/s/^.*host_nobrackets\:\s*\(.*\)$/\1/p')
 export SOURCE_MARIADB_IP
 
-MARIADB_IMAGE=registry.redhat.io/rhosp-dev-preview/openstack-mariadb-rhel9:18.0
+#MARIADB_IMAGE=registry.redhat.io/rhosp-dev-preview/openstack-mariadb-rhel9:18.0
+MARIADB_IMAGE=quay.io/podified-antelope-centos9/openstack-mariadb:current-podified
 export MARIADB_IMAGE
 
-MARIADB_CLIENT_ANNOTATIONS='--annotations=k8s.v1.cni.cncf.io/networks='"$OSPDO_INTERNAL_API_NET"''
-export MARIADB_CLIENT_ANNOTATIONS
-
 #RUN_OVERRIDES='{"apiVersion":"a1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"}}, "spec":{"nodeName": "ostest-master-0"}}'
-RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-osp18\",\"namespace\": \"'"$OSP18_NAMESPACE"'\"}]"}}, "spec":{"nodeSelector": {"type" : "openstack"}}}'
+#RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"}},"spec":{"securityContext": "ostest-master-0"}}'
+RUN_OVERRIDES='{
+    "apiVersion": "v1",
+    "metadata": {
+        "annotations": {
+            "k8s.v1.cni.cncf.io/networks": "[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"
+        }
+    },
+    "spec": {
+        "securityContext": {
+            "allowPrivilegeEscalation": false, 
+            "capabilities": { 
+                "drop": ["ALL"] 
+            }, 
+            "runAsNonRoot": true,
+            "seccompProfile": {
+                "type": "RuntimeDefault"
+            }
+        }
+    }
+}'
+#RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi\",\"namespace\": \"'"openstack"'\"}]"}}}'
+#RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-osp18\",\"namespace\": \"'"$OSP18_NAMESPACE"'\"}]"}}, "spec":{"nodeSelector": {"type" : "openstack"}}}'
 
 retrieve_topology_3_1() {
     # Get the list of databases from the source MariaDB
     echo "Show OSPdO databases"
     PULL_OPENSTACK_CONFIGURATION_DATABASES="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
-        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" -e 'SHOW databases;')"
+        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" -e 'SHOW databases;')"
     export PULL_OPENSTACK_CONFIGURATION_DATABASES
     echo "$PULL_OPENSTACK_CONFIGURATION_DATABASES"
 
@@ -53,14 +75,14 @@ retrieve_topology_3_1() {
     # Run mysqlcheck on the original database to look for inaccuracies
     echo "Running mysqlcheck on the source MariaDB"
     PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
-        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysqlcheck --all-databases -h "$SOURCE_MARIADB_IP" -u root -p"$SOURCE_DB_ROOT_PASSWORD" | grep -v OK)"
+        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysqlcheck --all-databases -h "$SOURCE_MARIADB_IP" -u root -p"$SOURCE_DB_ROOT_PASSWORD" | grep -v OK)"
     export PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK
     echo "$PULL_OPENSTACK_CONFIGURATION_MYSQLCHECK_NOK"
 
     # Get the Compute service (nova) cells mappings from the database:
     echo "Get the Compute service (nova) cells mappings from the database"
     PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
-        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "${SOURCE_MARIADB_IP}" -uroot -p"${SOURCE_DB_ROOT_PASSWORD}" nova_api -e \
+        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "${SOURCE_MARIADB_IP}" -uroot -p"${SOURCE_DB_ROOT_PASSWORD}" nova_api -e \
         'select uuid,name,transport_url,database_connection,disabled from cell_mappings;')"
     export PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS
     echo "$PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS"
@@ -68,7 +90,7 @@ retrieve_topology_3_1() {
     # Get the hostnames of the nova-compute services from the database
     echo "Get the hostnames of the nova-compute services from the database"
     PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
-        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" nova_api -e \
+        -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" nova_api -e \
         "select host from nova.services where services.binary='nova-compute';")"
     export PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES
     echo "$PULL_OPENSTACK_CONFIGURATION_NOVA_COMPUTE_HOSTNAMES"
@@ -81,11 +103,11 @@ retrieve_topology_3_1() {
 
     # Get the SR-IOV agents from the database
     echo "Get the SR-IOV agents from the database"
-    SRIOV_AGENTS=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" -it --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSP18_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" \
+    SRIOV_AGENTS=$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" -it --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" \
         -uroot -p"$SOURCE_DB_ROOT_PASSWORD" ovs_neutron -e "select host, configurations from agents where agents.binary='neutron-sriov-nic-agent';")
     export SRIOV_AGENTS
     echo "$SRIOV_AGENTS"
-    
+
     # Store exported variables for future use
     cat >~/.source_cloud_exported_variables <<EOF
 PULL_OPENSTACK_CONFIGURATION_DATABASES="$PULL_OPENSTACK_CONFIGURATION_DATABASES"
@@ -129,7 +151,7 @@ deploy_backend_services_3_2() {
     OCTAVIA_PASSWORD=$(grep <"${PASSWORD_FILE}" ' OctaviaPassword:' | awk -F ': ' '{ print $2; }')
     PLACEMENT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' PlacementPassword:' | awk -F ': ' '{ print $2; }')
     MYSQLROOT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' MysqlRootPassword:' | awk -F ': ' '{ print $2; }')
-    SWIFT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' SwiftPassword:' | awk -F ': ' '{ print $2; }') 
+    SWIFT_PASSWORD=$(grep <"${PASSWORD_FILE}" ' SwiftPassword:' | awk -F ': ' '{ print $2; }')
 
     oc set data secret/osp-secret -n ${OSP18_NAMESPACE} "AdminPassword=$ADMIN_PASSWORD"
 
@@ -161,7 +183,7 @@ deploy_backend_services_3_2() {
         exit 1
     }
 
-    # Cannot check for openstackcontrolplane to be ready as it will not be ready until 
+    # Cannot check for openstackcontrolplane to be ready as it will not be ready until
     # openstackclient is deployed.  openstackclient cannot be deployed until Keystone is
     # available.
     # echo "Wait for openstackcontrolplane to be Ready"
@@ -261,22 +283,41 @@ migrate_mariadb_3_6() {
     CHARACTER_SET=utf8
     COLLATION=utf8_general_ci
 
-    declare -A SOURCE_GALERA_MEMBERS
-
     create_mariadb_data "${OSPDO_NAMESPACE}" "${OSPDO_INTERNAL_API_NET}" "${CONTROLLER_NODE}" || {
         echo "Failed to create mariadb-copy-data pod"
         exit 1
     }
 
+    unset SG
+    unset SNN
+    # echo "$cpexport" | sed -n '/pacemaker_node_ips/{N;N;N;p}'
+    #   pacemaker_node_ips:
+    #     - 172.17.0.160
+    #     - 172.17.0.152
+    #     - 172.17.0.154
+    mapfile -t SG < <(echo "$cpexport" | sed -n '/pacemaker_node_ips/{n;N;N;s/[ -]//g;p}')
+    # echo "${SG[@]}"
+    # 172.17.0.160 172.17.0.152 172.17.0.154
+
+    # pacemaker_short_node_names:
+    #     - controller-0
+    #     - controller-1
+    #     - controller-2
+    mapfile -t SNN < <(echo "$cpexport" | sed -n -E '/pacemaker_short_node_names/{n;N;N;s/[ ]+-[ ]+//g;p}')
+
+    unset SOURCE_GALERA_MEMBERS
+    declare -A SOURCE_GALERA_MEMBERS
+
     # oc get osnetconfig -o jsonpath='{.items[0].spec.reservations}'
     SOURCE_GALERA_MEMBERS=(
-        ["controller-0"]=172.17.0.160
-        # ...
+        ["${SNN[0]}"]=${SG[0]}
+        ["${SNN[1]}"]=${SG[1]}
+        ["${SNN[2]}"]=${SG[2]} # ...
     )
 
     for i in "${!SOURCE_GALERA_MEMBERS[@]}"; do
         echo "Checking for the database node $i WSREP status Synced"
-        oc rsh -n "${OSPDO_NAMESPACE}" mariadb-copy-data mysql \
+        oc rsh -n "${OSPDO_NAMESPACE}" -- mariadb-copy-data mysql \
             -h "${SOURCE_GALERA_MEMBERS[$i]}" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" \
             -e "show global status like 'wsrep_local_state_comment'" |
             grep -qE "\bSynced\b"
@@ -374,11 +415,11 @@ EOF
         nova_api -e 'select uuid,name,transport_url,database_connection,disabled from cell_mappings;')
     uuidf='\S{8,}-\S{4,}-\S{4,}-\S{4,}-\S{12,}'
     left_behind=$(comm -23 \
-        <(echo $PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS | grep -oE " $uuidf \S+") \
-        <(echo $novadb_mapped_cells | tr -s "| " " " | grep -oE " $uuidf \S+"))
+        <(echo "$PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS" | grep -oE " $uuidf \S+") \
+        <(echo "$novadb_mapped_cells" | tr -s "| " " " | grep -oE " $uuidf \S+"))
     changed=$(comm -13 \
-        <(echo $PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS | grep -oE " $uuidf \S+") \
-        <(echo $novadb_mapped_cells | tr -s "| " " " | grep -oE " $uuidf \S+"))
+        <(echo "$PULL_OPENSTACK_CONFIGURATION_NOVADB_MAPPED_CELLS" | grep -oE " $uuidf \S+") \
+        <(echo "$novadb_mapped_cells" | tr -s "| " " " | grep -oE " $uuidf \S+"))
     # shellcheck disable=SC2046,SC2086
     test $(grep -Ec ' \S+$' <<<$left_behind) -eq 1
     # shellcheck disable=SC2086
@@ -429,13 +470,13 @@ create_ovn_copy_data_pod_1__2() {
 # 3.7 step 4 Backup OVN databases on a TLS everywhere environment.
 backup_ovn_dbs_3__4() {
     echo "Create backup of NB DB"
-    oc -n "${OSP18_NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6641 > /backup/ovs-nb.db" || {
+    oc -n "${OSP18_NAMESPACE}" exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVN_OVSDB_IP:6641 > /backup/ovs-nb.db" || {
         echo "ERROR: Failed to backup OVN NB DB"
         exit 1
     }
 
     echo "Create backup of SB DB"
-    oc -n ${OSP18_NAMESPACE} exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVSDB_IP:6642 > /backup/ovs-sb.db" || {
+    oc -n ${OSP18_NAMESPACE} exec ovn-copy-data -- bash -c "ovsdb-client backup --ca-cert=/etc/pki/tls/misc/ca.crt --private-key=/etc/pki/tls/misc/tls.key --certificate=/etc/pki/tls/misc/tls.crt ssl:$SOURCE_OVN_OVSDB_IP:6642 > /backup/ovs-sb.db" || {
         echo "ERROR: Failed to backup OVN SB DB"
         exit 1
     }
@@ -612,7 +653,7 @@ stop_ospdo_ovn_svcs_16() {
     for service in "${ServicesToStop[@]}"; do
         for i in {1..3}; do
             SSH_CMD=CONTROLLER${i}_SSH
-            if [ ! -z "${!SSH_CMD}" ]; then
+            if [ -n "${!SSH_CMD}" ]; then
                 if ! ${!SSH_CMD} systemctl show "$service" | grep ActiveState=inactive >/dev/null; then
                     echo "ERROR: Service $service still running on controller $i"
                 else
@@ -670,7 +711,7 @@ migrate-ovn-data | 3_7)
     stop_ospdo_ovn_svcs_16
     ;;
 create-mariadb-data)
-    create_mariadb_data "${OSPDO_NAMESPACE}" "internalapi-static" "${CONTROLLER_NODE}" 
+    create_mariadb_data "${OSPDO_NAMESPACE}" "internalapi-static" "${CONTROLLER_NODE}"
     ;;
 all)
     retrieve_topology_3_1

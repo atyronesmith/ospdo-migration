@@ -62,10 +62,10 @@ spec:
   }
 
   # Clean up old services and endpoints that still point to the old control plane, excluding the Identity service and its endpoints
-  $OS_CLIENT openstack endpoint list | grep keystone | awk '/admin/{ print $2; }' | xargs -t $OS_CLIENT openstack endpoint delete || true
+  $OS_CLIENT openstack endpoint list | grep keystone | awk '/admin/{ print $2; }' | xargs -t "$OS_CLIENT" openstack endpoint delete || true
 
   for service in aodh heat heat-cfn barbican cinderv3 glance manila manilav2 neutron nova placement swift ironic-inspector ironic; do
-    $OS_CLIENT openstack service list | awk "/ $service /{ print \$2; }" | xargs -t $OS_CLIENT openstack service delete || true
+    $OS_CLIENT openstack service list | awk "/ $service /{ print \$2; }" | xargs -t "$OS_CLIENT" openstack service delete || true
   done
 
   $OS_CLIENT openstack endpoint list | grep keystone || {

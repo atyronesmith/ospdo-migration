@@ -39,7 +39,7 @@ install_yaml_dir=$(realpath "$1")
 # sets project
 . common-ospdo.sh
 
-# Remove OSPdO NNCPs from the other two nodes which are not running the controller VM
+echo "Remove OSPdO NNCPs from the other two nodes which are not running the controller VM"
 for i in br-ctlplane br-ex br-osp; do
     oc patch -n "$OSPDO_NAMESPACE" osnetconfig openstacknetconfig --type json -p '[{"op": "replace", "path": "/spec/attachConfigurations/'$i'/nodeNetworkConfigurationPolicy/nodeSelector", "value": {"kubernetes.io/hostname": "'"$CONTROLLER_NODE"'"} } ]'
 done
