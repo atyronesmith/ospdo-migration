@@ -64,7 +64,7 @@ RUN_OVERRIDES='{
 
 retrieve_topology_3_1() {
     # Get the list of databases from the source MariaDB
-    echo "Show OSPdO databases"
+    echo "Show OSPdO databases running on $CONTROLLER_NODE"
     PULL_OPENSTACK_CONFIGURATION_DATABASES="$(oc run mariadb-client -q --image "${MARIADB_IMAGE}" \
         -i --rm --restart=Never --overrides="$RUN_OVERRIDES" -n "${OSPDO_NAMESPACE}" -- mysql -rsh "$SOURCE_MARIADB_IP" -uroot -p"$SOURCE_DB_ROOT_PASSWORD" -e 'SHOW databases;')"
     export PULL_OPENSTACK_CONFIGURATION_DATABASES
