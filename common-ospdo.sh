@@ -3,7 +3,7 @@
 # Get the name of the OCP node where the OSP Controller VM is running
 # For this POC, we only deploy a single controller VM
 # TODO - deploy with 3 controller VM and scale down to 1 VM
-CONTROLLER_NODE=$(oc get vmi -ojson | jq -r '.items[0].status.nodeName')
+CONTROLLER_NODE=$(oc -n "$OSPDO_NAMESPACE" get vmi -ojson | jq -r '.items[0].status.nodeName')
 # Fail if CONTROLLER_NODE is an empty string
 [[ -n "$CONTROLLER_NODE" ]] || {
     echo "Failed to get the name of the OCP node where the OSP Controller VM is running"
