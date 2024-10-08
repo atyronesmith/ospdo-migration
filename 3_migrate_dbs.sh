@@ -16,8 +16,8 @@ usage() {
     echo "  migrate-mariadb | 3_6 : Migrate MariaDB"
 }
 
-OVSDB_IMAGE=registry.redhat.io/rhosp-dev-preview/openstack-ovn-base-rhel9:18.0
-export OVSDB_IMAGE
+OVN_OVSDB_IMAGE=quay.io/podified-antelope-centos9/openstack-ovn-base:current-podified
+export OVN_OVSDB_IMAGE
 
 SOURCE_OVN_OVSDB_IP=172.17.0.160 # TODO - get this from the source OVN DB
 export SOURCE_OVN_OVSDB_IP
@@ -33,7 +33,6 @@ cpexport=$(oc -n "${OSPDO_NAMESPACE}" get cm tripleo-exports-default -o json | j
 SOURCE_MARIADB_IP=$(echo "$cpexport" | sed -e '0,/ MysqlInternal/d' | sed -n '0,/host_nobrackets/s/^.*host_nobrackets\:\s*\(.*\)$/\1/p')
 export SOURCE_MARIADB_IP
 
-#MARIADB_IMAGE=registry.redhat.io/rhosp-dev-preview/openstack-mariadb-rhel9:18.0
 MARIADB_IMAGE=quay.io/podified-antelope-centos9/openstack-mariadb:current-podified
 export MARIADB_IMAGE
 
