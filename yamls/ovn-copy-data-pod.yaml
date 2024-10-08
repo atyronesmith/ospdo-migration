@@ -18,7 +18,7 @@ spec:
   nodeSelector:
     type: openstack
   containers:
-  - image: ${OVSDB_IMAGE}
+  - image: ${OVN_OVSDB_IMAGE}
     command: [ "sh", "-c", "sleep infinity"]
     name: adoption
     volumeMounts:
