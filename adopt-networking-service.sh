@@ -12,8 +12,8 @@ spec:
           internal:
             metadata:
               annotations:
-                metallb.universe.tf/address-pool: internalapi-osp18
-                metallb.universe.tf/allow-shared-ip: internalapi-osp18
+                metallb.universe.tf/address-pool: internalapi
+                metallb.universe.tf/allow-shared-ip: internalapi
                 metallb.universe.tf/loadBalancerIPs: 172.17.0.80
             spec:
               type: LoadBalancer
@@ -21,7 +21,7 @@ spec:
       databaseAccount: neutron
       secret: osp-secret
       networkAttachments:
-      - internalapi-osp18
+      - internalapi
 '; then
     echo "Failed to apply neutron enable to openstackcontrolplane"
     exit 1

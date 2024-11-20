@@ -2,43 +2,43 @@
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: ctlplane-osp18
+  name: ctlplane
   namespace: metallb-system
 spec:
   ipAddressPools:
-  - ctlplane-osp18
+  - ctlplane
   interfaces:
   - br-ctlplane
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: internalapi-osp18
+  name: internalapi
   namespace: metallb-system
 spec:
   ipAddressPools:
-  - internalapi-osp18
+  - internalapi
   interfaces:
   - enp7s0.20 
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: storage-osp18
+  name: storage
   namespace: metallb-system
 spec:
   ipAddressPools:
-  - storage-osp18
+  - storage
   interfaces:
   - enp7s0.30
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
-  name: tenant-osp18
+  name: tenant
   namespace: metallb-system
 spec:
   ipAddressPools:
-  - tenant-osp18
+  - tenant
   interfaces:
   - enp7s0.50

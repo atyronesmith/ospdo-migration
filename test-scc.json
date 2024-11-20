@@ -1,0 +1,20 @@
+{
+    "apiVersion": "v1",
+    "metadata": {
+        "annotations": {
+            "k8s.v1.cni.cncf.io/networks": "[{\"name\": \"internalapi-static\",\"namespace\": \"openstack\", \"ips\":[\"172.17.0.99/24\"]}]"
+        }
+    },
+    "spec": {
+        "securityContext": {
+            "allowPrivilegeEscalation": false,
+            "capabilities": {
+                "drop": ["ALL"]
+            },
+            "runAsNonRoot": true,
+            "seccompProfile": {
+                "type": "RuntimeDefault"
+            }
+        }    
+    }
+}

@@ -94,13 +94,13 @@ envsubst <yamls/nads.yaml | oc apply -f - || {
 
 # install_yaml doesn't install metallb with the above parameters
 # install it now
-if [ "$(oc get pod -n $OSPDO_NAMESPACE --no-headers=true -l component=speaker -n metallb-system | wc -l)" -ne 3 ]; then
+if [ "$(oc get pod --no-headers=true -l component=speaker -n metallb-system | wc -l)" -ne 3 ]; then
     # Install metallb
     (cd "$install_yaml_dir" || exit && BMO_SETUP=false NETWORK_ISOLATION=false make metallb)
 fi
 
 # Make sure OVNKubernetes IPForwarding is enabled
-oc patch network.operator cluster -n $OSPDO_NAMESPACE -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"ipForwarding": "Global"}}}}}' --type=merge || {
+oc patch network.operator cluster -p '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"ipForwarding": "Global"}}}}}' --type=merge || {
     echo "Failed to patch network.operator"
     exit 1
 }

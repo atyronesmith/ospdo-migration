@@ -5,9 +5,6 @@ metadata:
     osp/interface: enp7s0
   name: enp7s0-${OSP18_NODE1}
 spec:
-  # This does not get inherited by every service!
-  nodeSelector:
-    type: openstack
   desiredState:
     dns-resolver:
       config:

@@ -59,7 +59,7 @@ RUN_OVERRIDES='{
 }'
 
 #RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi\",\"namespace\": \"'"openstack"'\"}]"}}}'
-#RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi-osp18\",\"namespace\": \"'"$OSP18_NAMESPACE"'\"}]"}}, "spec":{"nodeSelector": {"type" : "openstack"}}}'
+#RUN_OVERRIDES='{"apiVersion":"v1","metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\": \"internalapi\",\"namespace\": \"'"$OSP18_NAMESPACE"'\"}]"}}, "spec":{"nodeSelector": {"type" : "openstack"}}}'
 
 retrieve_topology_3_1() {
     # Get the list of databases from the source MariaDB
@@ -493,15 +493,15 @@ spec:
         ovndbcluster-nb:
           dbType: NB
           storageRequest: 10G
-          networkAttachment: internalapi-osp18
+          networkAttachment: internalapi
         ovndbcluster-sb:
           dbType: SB
           storageRequest: 10G
-          networkAttachment: internalapi-osp18
+          networkAttachment: internalapi
       ovnNorthd:
         replicas: 0
       ovnController:
-        networkAttachment: tenant-osp18
+        networkAttachment: tenant
         nodeSelector:
           node: non-existing-node-name
 '
